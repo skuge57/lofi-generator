@@ -96,6 +96,7 @@ body {
 
 .mood-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
 }
@@ -117,7 +118,7 @@ body {
 }
 
 .mood-btn {
-  flex: 1;
+  flex: 1 1 72px;
   padding: 8px 0;
   border: 1px solid #3a3028;
   background: transparent;
@@ -228,6 +229,44 @@ body {
   text-align: right;
   color: #c8a87a;
   font-size: 0.78rem;
+}
+
+.seed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: #8a7060;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.seed-label {
+  flex-shrink: 0;
+}
+
+.seed-input {
+  flex: 1;
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid #3a3028;
+  border-radius: 8px;
+  background: #1a1612;
+  color: #d4b896;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.seed-input::placeholder {
+  color: #5a4a40;
+}
+
+.seed-input:focus {
+  outline: none;
+  border-color: #8a7060;
 }
 
 input[type='range'] {
@@ -361,6 +400,11 @@ input[type='range']::-moz-range-thumb {
 }
 
 .chord-name {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 46px;
   font-size: 0.85rem;
   color: #6a5a4a;
   letter-spacing: 0.03em;
@@ -374,6 +418,20 @@ input[type='range']::-moz-range-thumb {
   background: #c8a87a22;
 }
 
+.chord-symbol {
+  line-height: 1.1;
+}
+
+.chord-roman {
+  color: #8a7060;
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
+.chord-name.active .chord-roman {
+  color: #c8a87a;
+}
+
 .prog-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -381,6 +439,10 @@ input[type='range']::-moz-range-thumb {
 }
 
 .prog-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 7px 10px;
   border: 1px solid #3a3028;
   background: transparent;
@@ -394,15 +456,30 @@ input[type='range']::-moz-range-thumb {
   transition: all 0.15s;
 }
 
+.prog-roman {
+  color: #6a5a4a;
+  font-size: 0.68rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .prog-btn:hover {
   border-color: #c8a87a88;
   color: #c8a87a;
+}
+
+.prog-btn:hover .prog-roman {
+  color: #a98a66;
 }
 
 .prog-btn.selected {
   border-color: #c8a87a;
   background: #c8a87a18;
   color: #e0c090;
+}
+
+.prog-btn.selected .prog-roman {
+  color: #c8a87a;
 }
 
 /* Instrument toggles */
@@ -476,4 +553,3 @@ input[type='range']::-moz-range-thumb {
   background: #c8a87a18;
   color: #e0c090;
 }
-

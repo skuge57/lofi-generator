@@ -1,4 +1,4 @@
-export type Mood = 'chill' | 'sad' | 'jazzy';
+export type Mood = 'chill' | 'sad' | 'jazzy' | 'dreamy' | 'rainy' | 'dusty' | 'upbeat' | 'sleepy';
 export type TimeSignature = '4/4' | '3/4' | '5/4' | '6/8';
 export type BassStyle = 'simple' | 'walking' | 'lazy' | 'bounce' | 'dub' | 'pedal';
 
@@ -14,6 +14,8 @@ export interface InstrumentMix {
 }
 
 export interface EngineParams {
+  /** When set, musical randomness is derived from this string and the arrangement fingerprint so the same URL/settings reproduce the same beat. */
+  seed?: string;
   bpm: number;
   mood: Mood;
   progressionId: string;
@@ -26,11 +28,13 @@ export interface EngineParams {
   octaveShift: number;
   chordLength: number;
   chordTiming: number;
+  swing: number;
   melodyOctave: number;
   drumProb: { kick: number; snare: number; hihat: number };
   keyShift: number;
   bassStyle: BassStyle;
   songForm: boolean;
+  energy: number;
   timeSignature: TimeSignature;
 }
 
@@ -40,6 +44,8 @@ export interface SongSection {
   bars: number;
   mutes?: (keyof InstrumentMix)[];
   drumDensity?: number;
+  energy?: number;
+  filterTilt?: number;
   fillOnLastBar?: boolean;
 }
 

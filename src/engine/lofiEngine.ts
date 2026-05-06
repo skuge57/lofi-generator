@@ -1,8 +1,21 @@
 import * as Tone from 'tone';
+import { createRng } from './rng';
 import { getProgressionById, getPattern, SONG_ARRANGEMENT, locateSection } from './musicTheory';
 import type { BassStyle, EngineParams, Mood, ProgressionDef, RhythmPattern, SectionInfo, InstrumentMix, TimeSignature } from './types';
 
+function cloneEngineParams(p: EngineParams): EngineParams {
+  return {
+    ...p,
+    mix: { ...p.mix },
+    drumProb: { ...p.drumProb },
+  };
+}
+
 const DEFAULT_STEPS_PER_BAR = 16;
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
 
 type MelodyDur = '8n' | '4n' | '2n';
 
@@ -26,13 +39,20 @@ export class LofiEngine {
   private hihat: Tone.MetalSynth;
   private vinyl: Tone.Noise;
   private vinylGain: Tone.Gain;
+  private vinylDustGain: Tone.Gain;
+  private vinylDustFilter: Tone.Filter;
+  private vinylClick: Tone.NoiseSynth;
+  private vinylClickFilter: Tone.Filter;
+  private vinylPop: Tone.MembraneSynth;
 
   private reverb: Tone.Reverb;
   private limiter: Tone.Limiter;
   private lowpass: Tone.Filter;
   private highpass: Tone.Filter;
+  private tapeSaturation: Tone.Distortion;
   private tapeWow: Tone.Vibrato;
   private tapeFlutter: Tone.Vibrato;
+  private tapeTremble: Tone.Tremolo;
   private gates: Record<keyof EngineParams['mix'], Tone.Gain>;
 
   private sequence: Tone.Sequence<number> | null = null;
@@ -46,6 +66,7 @@ export class LofiEngine {
   private currentKeyShift = 0;
   private currentBassStyle: BassStyle = 'simple';
   private currentTimeSignature: TimeSignature = '4/4';
+  private currentEnergy = 70;
   private currentStepsPerBar = DEFAULT_STEPS_PER_BAR;
   private currentStep = 0;
   private chordIndex = 0;
@@ -56,6 +77,13 @@ export class LofiEngine {
   private sectionIdx = 0;
   private barInSection = 0;
   private isFillBar = false;
+  private activeEnergy = 0.7;
+  private activeKickScale = 1;
+  private activeSnareScale = 1;
+  private activeHihatScale = 1;
+  private activeMelodyChance = 1;
+  private baseLowCut = 60;
+  private baseHighCut = 8000;
 
   // Pre-computed caches — rebuilt only when params change, never in tick()
   private cachedProg!: ProgressionDef;
@@ -93,7 +121,14 @@ export class LofiEngine {
   private motifAge = 0;
   private motifMaxBars = 0;
 
+  private rnd: () => number = Math.random;
+  /** Latest params from the UI — used to build deterministic RNG state from seed + arrangement. */
+  private snap: EngineParams;
+  private seededMode = false;
+
   constructor(params: EngineParams) {
+    this.snap = cloneEngineParams(params);
+    this.attachRng();
     this.currentMood = params.mood;
     this.currentProgressionId = params.progressionId;
     this.currentOctaveShift = params.octaveShift;
@@ -104,28 +139,43 @@ export class LofiEngine {
     this.currentKeyShift = params.keyShift;
     this.currentBassStyle = params.bassStyle;
     this.currentTimeSignature = params.timeSignature;
+    this.currentEnergy = params.energy;
     this.songFormEnabled = params.songForm;
+    this.baseLowCut = params.lowCut;
+    this.baseHighCut = params.highCut;
 
     // Effects chain: instruments → gates → highpass → lowpass → tape → reverb → limiter
     // Chorus removed from master bus — it processed all instruments simultaneously.
     // The chord tremolo still provides movement on the pad specifically.
     this.limiter = new Tone.Limiter(-3).toDestination();
     this.reverb = new Tone.Reverb({ decay: 0.35, wet: params.reverb }).connect(this.limiter);
+    this.tapeTremble = new Tone.Tremolo({
+      frequency: 0.65,
+      depth: 0,
+      type: 'sine',
+      spread: 0,
+      wet: 0,
+    }).connect(this.reverb).start();
     this.tapeFlutter = new Tone.Vibrato({
       frequency: 6.2,
-      depth: 0.008,
-      maxDelay: 0.004,
+      depth: 0,
+      maxDelay: 0.014,
       type: 'triangle',
       wet: 0,
-    }).connect(this.reverb);
+    }).connect(this.tapeTremble);
     this.tapeWow = new Tone.Vibrato({
       frequency: 0.18,
-      depth: 0.055,
-      maxDelay: 0.03,
+      depth: 0,
+      maxDelay: 0.065,
       type: 'sine',
       wet: 0,
     }).connect(this.tapeFlutter);
-    this.lowpass = new Tone.Filter(params.highCut, 'lowpass').connect(this.tapeWow);
+    this.tapeSaturation = new Tone.Distortion({
+      distortion: 0,
+      oversample: '2x',
+      wet: 0,
+    }).connect(this.tapeWow);
+    this.lowpass = new Tone.Filter(params.highCut, 'lowpass').connect(this.tapeSaturation);
     this.highpass = new Tone.Filter(params.lowCut, 'highpass').connect(this.lowpass);
 
     const g = (on: boolean) => new Tone.Gain(on ? 1 : 0).connect(this.highpass);
@@ -204,21 +254,106 @@ export class LofiEngine {
     }).connect(this.gates.hihat);
     this.hihat.frequency.value = 400;
 
-    // Vinyl crackle — routed through gates.vinyl directly
+    // Vinyl texture: steady filtered bed plus transient clicks and low pops.
     this.vinylGain = this.gates.vinyl;
-    this.vinyl = new Tone.Noise('pink').connect(this.vinylGain);
+    this.vinylDustGain = new Tone.Gain(0.45).connect(this.vinylGain);
+    this.vinylDustFilter = new Tone.Filter({
+      frequency: 1800,
+      type: 'bandpass',
+      Q: 0.7,
+    }).connect(this.vinylDustGain);
+    this.vinyl = new Tone.Noise('pink').connect(this.vinylDustFilter);
+    this.vinylClickFilter = new Tone.Filter({
+      frequency: 5200,
+      type: 'highpass',
+      Q: 0.6,
+    }).connect(this.vinylGain);
+    this.vinylClick = new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: { attack: 0.001, decay: 0.012, sustain: 0, release: 0.02 },
+      volume: -2,
+    }).connect(this.vinylClickFilter);
+    this.vinylPop = new Tone.MembraneSynth({
+      pitchDecay: 0.035,
+      octaves: 2.6,
+      envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.04 },
+      volume: -7,
+    }).connect(this.vinylGain);
 
-    Tone.getTransport().bpm.value = params.bpm;
-    this._vinylLevel = params.vinyl * 0.03;
     this._mix = params.mix;
+    Tone.getTransport().bpm.value = params.bpm;
+    Tone.getTransport().swingSubdivision = '16n';
+    Tone.getTransport().swing = clamp(params.swing, 0, 1);
+    this.applyVinylAmount(params.vinyl, 0);
     this.applyTape(params.tape, 0);
     this.applyMix(params.mix);
+    this.updateEnergyShaping(0);
 
     this.rebuildCache();
   }
 
+  private attachRng(): void {
+    this.rnd = createRng(this.snap.seed, this.snap);
+    this.seededMode = typeof this.snap.seed === 'string' && this.snap.seed.trim().length > 0;
+  }
+
+  private mergeSnap(p: Partial<EngineParams>): void {
+    this.snap = {
+      ...this.snap,
+      ...p,
+      mix: p.mix ? { ...p.mix } : { ...this.snap.mix },
+      drumProb: p.drumProb ? { ...p.drumProb } : { ...this.snap.drumProb },
+    };
+  }
+
+  private restartSequenceFromBeginning(): void {
+    Tone.getTransport().stop();
+    this.sequence?.stop();
+    this.sequence?.dispose();
+    this.sequence = null;
+    this.resetComposition();
+    this.generateMelodyPattern();
+    this.scheduleSequence().start(0);
+    Tone.getTransport().start();
+  }
+
   private _vinylLevel = 0.01;
   private _mix: EngineParams['mix'];
+
+  private applyVinylAmount(amount: number, rampTime = 0.2): void {
+    const vinyl = clamp(amount, 0, 1);
+    this._vinylLevel = vinyl * 0.055;
+    this.vinylDustGain.gain.rampTo(0.18 + vinyl * 0.32, rampTime);
+    this.vinylDustFilter.frequency.rampTo(1100 + vinyl * 2400, rampTime);
+    if (this.effectiveMix().vinyl) this.vinylGain.gain.rampTo(this._vinylLevel, rampTime);
+  }
+
+  private tickVinyl(time: number, step: number): void {
+    const amount = clamp(this.snap.vinyl, 0, 1);
+    if (amount <= 0 || !this._mix.vinyl) return;
+
+    const dustChance = 0.1 + amount * 0.24;
+    const popChance = 0.08 + amount * 0.16;
+    const dropoutChance = 0.025 + amount * 0.07;
+
+    if (this.rnd() < dustChance) {
+      const vel = 0.28 + amount * 0.34 + this.rnd() * 0.22;
+      this.vinylClick.triggerAttackRelease('64n', time + this.rnd() * 0.012, vel);
+    }
+
+    if ((step === 0 || step === this.cachedBassHalfStep) && this.rnd() < popChance) {
+      const note = this.rnd() < 0.5 ? 'C2' : 'F1';
+      this.vinylPop.triggerAttackRelease(note, '16n', time + this.rnd() * 0.018, 0.55 + amount * 0.28);
+    }
+
+    if (step % this.cachedBassQuarterStep === 0 && this.rnd() < dropoutChance) {
+      const dip = 0.12 + this.rnd() * 0.18;
+      const recoverAt = time + 0.045 + this.rnd() * 0.08;
+      this.vinylDustGain.gain.setValueAtTime(this.vinylDustGain.gain.value, time);
+      this.vinylDustGain.gain.linearRampToValueAtTime(dip, time + 0.012);
+      this.vinylDustGain.gain.linearRampToValueAtTime(0.18 + amount * 0.32, recoverAt);
+    }
+  }
 
   private rebuildCache(): void {
     this.cachedProg = getProgressionById(this.currentProgressionId);
@@ -295,8 +430,35 @@ export class LofiEngine {
 
   private applyTape(amount: number, rampTime = 0.2): void {
     const tape = Math.max(0, Math.min(1, amount));
+    this.tapeSaturation.distortion = tape * 0.28;
+    this.tapeSaturation.wet.rampTo(tape * 0.55, rampTime);
     this.tapeWow.wet.rampTo(tape, rampTime);
-    this.tapeFlutter.wet.rampTo(tape * 0.45, rampTime);
+    this.tapeWow.depth.rampTo(tape * 0.38, rampTime);
+    this.tapeFlutter.wet.rampTo(tape * 0.9, rampTime);
+    this.tapeFlutter.depth.rampTo(tape * 0.2, rampTime);
+    this.tapeTremble.wet.rampTo(tape * 0.45, rampTime);
+    this.tapeTremble.depth.rampTo(tape * 0.18, rampTime);
+  }
+
+  private updateEnergyShaping(rampTime = 0.25): void {
+    const sec = this.songFormEnabled ? SONG_ARRANGEMENT[this.sectionIdx] : null;
+    const userEnergy = clamp(this.currentEnergy / 100, 0, 1);
+    const sectionTarget = sec?.energy ?? 1;
+    const fillLift = this.isFillBar ? 0.18 : 0;
+    const energy = clamp(sectionTarget * (0.45 + userEnergy * 0.55) + fillLift, 0, 1.15);
+    const density = (sec?.drumDensity ?? 1) * (0.45 + energy * 0.75);
+
+    this.activeEnergy = energy;
+    this.activeKickScale = clamp(density * (0.75 + energy * 0.35), 0, 1.25);
+    this.activeSnareScale = clamp(density * (0.7 + energy * 0.4), 0, 1.2);
+    this.activeHihatScale = clamp(density * (0.45 + energy * 0.75), 0, 1.3);
+    this.activeMelodyChance = clamp(0.28 + energy * 0.45, 0.18, 0.78);
+
+    const filterTilt = sec?.filterTilt ?? 1;
+    const highCut = clamp(this.baseHighCut * filterTilt * (0.58 + energy * 0.5), 500, 18000);
+    const lowCut = clamp(this.baseLowCut + (1 - Math.min(energy, 1)) * 22, 20, 500);
+    this.lowpass.frequency.rampTo(highCut, rampTime);
+    this.highpass.frequency.rampTo(lowCut, rampTime);
   }
 
   // Combines the user's mix with the active section's mute overrides. On a
@@ -341,6 +503,7 @@ export class LofiEngine {
     this.barInSection = barInSection;
     const sec = SONG_ARRANGEMENT[index];
     this.isFillBar = !!sec.fillOnLastBar && barInSection === sec.bars - 1;
+    this.updateEnergyShaping();
   }
 
   private transpose(note: string, semitones: number): string {
@@ -353,27 +516,29 @@ export class LofiEngine {
   // relative to the bar's anchor position in the sorted pool, so when the
   // anchor moves with the chord change the same shape replays at a new pitch.
   private generateMotif(): Motif {
-    const noteCount = 3 + Math.floor(Math.random() * 2); // 3–4 notes
+    const maxExtraNotes = this.activeEnergy > 0.78 ? 2 : this.activeEnergy > 0.48 ? 1 : 0;
+    const noteCount = 1 + Math.floor(this.rnd() * (maxExtraNotes + 1)) + (this.activeEnergy > 0.82 && this.rnd() < 0.45 ? 1 : 0);
     const deltas: number[] = [0];
     let cur = 0;
-    let dir = Math.random() < 0.5 ? 1 : -1;
+    let dir = this.rnd() < 0.5 ? 1 : -1;
     for (let i = 1; i < noteCount; i++) {
-      const jump = Math.random() < 0.75 ? 1 : 2; // mostly stepwise, occasional skip
+      const jump = this.rnd() < 0.86 ? 1 : 2; // mostly stepwise, rare skip
       cur += dir * jump;
       deltas.push(cur);
-      if (Math.random() < 0.3) dir = -dir;
+      if (this.rnd() < 0.2) dir = -dir;
     }
     const durs: MelodyDur[] = [];
     for (let i = 0; i < noteCount; i++) {
       const isLast = i === noteCount - 1;
       durs.push(isLast
-        ? (Math.random() < 0.55 ? '4n' : '2n')
-        : (Math.random() < 0.55 ? '4n' : '8n'));
+        ? (this.rnd() < 0.72 ? '2n' : '4n')
+        : (this.rnd() < 0.72 ? '4n' : '8n'));
     }
+    const startChoices = this.activeEnergy > 0.75 ? [0, 2, 4] : [0, 4, 6];
     return {
       deltas,
       durs,
-      startStep: Math.floor(Math.random() * 3),
+      startStep: startChoices[Math.floor(this.rnd() * startChoices.length)] ?? 0,
     };
   }
 
@@ -422,7 +587,7 @@ export class LofiEngine {
     if (!this.motif || this.motifAge >= this.motifMaxBars) {
       this.motif = this.generateMotif();
       this.motifAge = 0;
-      this.motifMaxBars = 3 + Math.floor(Math.random() * 4); // 3–6 bars
+      this.motifMaxBars = 3 + Math.floor(this.rnd() * 4); // 3–6 bars
     }
     const motif = this.motif;
 
@@ -447,11 +612,11 @@ export class LofiEngine {
     // repeat first, then evolve. Inversion flips the contour; the jitter
     // version nudges every delta slightly to sidestep verbatim repetition.
     let workingDeltas = motif.deltas;
-    if (this.motifAge === 2 && Math.random() < 0.45) {
+    if (this.motifAge === 2 && this.rnd() < 0.45) {
       workingDeltas = motif.deltas.map(d => -d);
-    } else if (this.motifAge >= 3 && Math.random() < 0.5) {
+    } else if (this.motifAge >= 3 && this.rnd() < 0.5) {
       workingDeltas = motif.deltas.map((d, i) =>
-        i === 0 ? d : d + (Math.random() < 0.5 ? 1 : -1)
+        i === 0 ? d : d + (this.rnd() < 0.5 ? 1 : -1)
       );
     }
 
@@ -488,6 +653,7 @@ export class LofiEngine {
   }
 
   async start(): Promise<void> {
+    this.attachRng();
     await this.reverb.ready;
     await Tone.start();
     this.vinyl.start();
@@ -525,20 +691,16 @@ export class LofiEngine {
 
     const shiftedNotes = this.cachedChordNotes[this.chordIndex];
 
-    const drumScale = this.songFormEnabled
-      ? (SONG_ARRANGEMENT[this.sectionIdx].drumDensity ?? 1)
-      : 1;
-
-    if (this.cachedPattern.kick[step] && Math.random() < this.currentDrumProb.kick * drumScale) {
+    if (this.cachedPattern.kick[step] && this.rnd() < this.currentDrumProb.kick * this.activeKickScale) {
       this.kick.triggerAttackRelease('C1', '8n', time);
     }
 
-    if (this.cachedPattern.snare[step] && Math.random() < this.currentDrumProb.snare * drumScale) {
+    if (this.cachedPattern.snare[step] && this.rnd() < this.currentDrumProb.snare * this.activeSnareScale) {
       this.snare.triggerAttackRelease('8n', time);
     }
 
-    if (this.cachedPattern.hihat[step] && Math.random() < this.currentDrumProb.hihat * drumScale) {
-      this.hihat.triggerAttackRelease('32n', time, 0.3 + Math.random() * 0.2);
+    if (this.cachedPattern.hihat[step] && this.rnd() < this.currentDrumProb.hihat * this.activeHihatScale) {
+      this.hihat.triggerAttackRelease('32n', time, 0.24 + this.activeEnergy * 0.18 + this.rnd() * 0.16);
     }
 
     // Snare-roll fill on the last beat group of a fill bar, telegraphing the next section.
@@ -549,8 +711,8 @@ export class LofiEngine {
     }
 
     if (this.cachedChordStepSet.has(step)) {
-      const jitter = Math.random() * this.currentChordTiming * 0.12;
-      this.chordSynth.triggerAttackRelease(shiftedNotes, this.currentChordLength, time + jitter, 0.5 + Math.random() * 0.1);
+      const jitter = this.rnd() * this.currentChordTiming * 0.12;
+      this.chordSynth.triggerAttackRelease(shiftedNotes, this.currentChordLength, time + jitter, 0.5 + this.rnd() * 0.1);
     }
 
     if (this.currentBassStyle === 'walking') {
@@ -570,7 +732,7 @@ export class LofiEngine {
         this.bassSynth.triggerAttackRelease(this.cachedBassRoots[this.chordIndex], '2n', time, 0.7);
       } else if (lazyPos === 1) {
         // Syncopated fifth, dragged feel via small late jitter
-        const drag = Math.random() * 0.02;
+        const drag = this.rnd() * 0.02;
         this.bassSynth.triggerAttackRelease(this.cachedBassFifths[this.chordIndex], '4n', time + drag, 0.6);
       }
     } else if (this.currentBassStyle === 'bounce') {
@@ -604,22 +766,27 @@ export class LofiEngine {
     }
 
     const melHit = this.melodyPatternBuf[step];
-    if (melHit !== null) {
-      const jitter = Math.random() * this.currentChordTiming * 0.08;
-      this.melodySynth.triggerAttackRelease(melHit.note, melHit.dur, time + jitter, 0.45 + Math.random() * 0.15);
+    if (melHit !== null && this.rnd() < this.activeMelodyChance) {
+      const jitter = this.rnd() * this.currentChordTiming * 0.08;
+      this.melodySynth.triggerAttackRelease(melHit.note, melHit.dur, time + jitter, 0.34 + this.activeEnergy * 0.18 + this.rnd() * 0.12);
       this.prevMelodyNote = melHit.note;
 
       const counterHit = this.counterPatternBuf[step];
       if (counterHit !== null) {
         // Same jitter so lead and harmony lock together rhythmically.
-        this.counterSynth.triggerAttackRelease(counterHit.note, counterHit.dur, time + jitter, 0.32 + Math.random() * 0.1);
+        this.counterSynth.triggerAttackRelease(counterHit.note, counterHit.dur, time + jitter, 0.32 + this.rnd() * 0.1);
       }
     }
+
+    this.tickVinyl(time, step);
   }
 
   updateParams(params: Partial<EngineParams>): void {
+    const seedTouched = params.seed !== undefined;
+    this.mergeSnap(params);
     let needsRebuild = false;
     let needsSequenceRestart = false;
+    let reopenedSequenceAfterRebuild = false;
 
     if (params.bpm !== undefined) {
       Tone.getTransport().bpm.rampTo(params.bpm, 0.1);
@@ -654,24 +821,33 @@ export class LofiEngine {
     if (params.chordTiming !== undefined) {
       this.currentChordTiming = params.chordTiming;
     }
+    if (params.swing !== undefined) {
+      Tone.getTransport().swingSubdivision = '16n';
+      Tone.getTransport().swing = clamp(params.swing, 0, 1);
+    }
     if (params.drumProb !== undefined) {
       this.currentDrumProb = { ...params.drumProb };
+    }
+    if (params.energy !== undefined) {
+      this.currentEnergy = params.energy;
+      this.updateEnergyShaping();
     }
     if (params.reverb !== undefined) {
       this.reverb.wet.rampTo(params.reverb, 0.2);
     }
     if (params.vinyl !== undefined) {
-      this._vinylLevel = params.vinyl * 0.03;
-      if (this._mix.vinyl) this.vinylGain.gain.rampTo(this._vinylLevel, 0.2);
+      this.applyVinylAmount(params.vinyl);
     }
     if (params.tape !== undefined) {
       this.applyTape(params.tape);
     }
     if (params.lowCut !== undefined) {
-      this.highpass.frequency.rampTo(params.lowCut, 0.1);
+      this.baseLowCut = params.lowCut;
+      this.updateEnergyShaping(0.1);
     }
     if (params.highCut !== undefined) {
-      this.lowpass.frequency.rampTo(params.highCut, 0.1);
+      this.baseHighCut = params.highCut;
+      this.updateEnergyShaping(0.1);
     }
     if (params.mix !== undefined) {
       this._mix = params.mix;
@@ -690,21 +866,39 @@ export class LofiEngine {
       this.songFormEnabled = params.songForm;
       if (this.songFormEnabled) this.currentBar = 0;
       this.updateSection();
+      this.updateEnergyShaping();
       this.applyEffectiveMix();
     }
 
     if (needsRebuild) {
+      this.attachRng();
       const stepsBefore = this.currentStepsPerBar;
       this.rebuildCache();
-      this.chordIndex = this.cachedProg.chords.length - 1;
-      this.generateMelodyPattern();
-      if (this.sequence && (needsSequenceRestart || stepsBefore !== this.currentStepsPerBar)) {
-        Tone.getTransport().stop();
-        this.sequence.stop();
-        this.sequence.dispose();
-        this.scheduleSequence().start(0);
-        Tone.getTransport().start();
+      if (this.seededMode) {
+        this.resetComposition();
+      } else {
+        this.chordIndex = this.cachedProg.chords.length - 1;
       }
+      this.generateMelodyPattern();
+      const mustRestart =
+        this.sequence !== null &&
+        (needsSequenceRestart || stepsBefore !== this.currentStepsPerBar || this.seededMode);
+      if (mustRestart) {
+        reopenedSequenceAfterRebuild = true;
+        const seq = this.sequence;
+        if (seq) {
+          Tone.getTransport().stop();
+          seq.stop();
+          seq.dispose();
+          this.scheduleSequence().start(0);
+          Tone.getTransport().start();
+        }
+      }
+    }
+
+    if (seedTouched && this.sequence && !reopenedSequenceAfterRebuild) {
+      this.attachRng();
+      this.restartSequenceFromBeginning();
     }
   }
 
@@ -739,10 +933,17 @@ export class LofiEngine {
     this.snare.dispose();
     this.hihat.dispose();
     this.vinyl.dispose();
+    this.vinylDustGain.dispose();
+    this.vinylDustFilter.dispose();
+    this.vinylClick.dispose();
+    this.vinylClickFilter.dispose();
+    this.vinylPop.dispose();
     (['chord', 'bass', 'kick', 'snare', 'hihat', 'melody', 'counter', 'vinyl'] as const).forEach(k => this.gates[k].dispose());
     this.reverb.dispose();
+    this.tapeSaturation.dispose();
     this.tapeWow.dispose();
     this.tapeFlutter.dispose();
+    this.tapeTremble.dispose();
     this.lowpass.dispose();
     this.highpass.dispose();
     this.limiter.dispose();

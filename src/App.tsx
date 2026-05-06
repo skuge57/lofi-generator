@@ -4,43 +4,24 @@ import { Player } from './components/Player';
 import { LeftControls, RightControls } from './components/Controls';
 import { InstrumentToggles } from './components/InstrumentToggles';
 import { ProgressionPicker } from './components/ProgressionPicker';
-import type { EngineParams, InstrumentMix, SectionInfo } from './engine/types';
+import type { EngineParams, SectionInfo } from './engine/types';
+import { DEFAULT_PARAMS } from './defaults';
+import { parseParamsFromSearch, serializeParamsToSearch } from './urlState';
 import './App.css';
-
-const DEFAULT_MIX: InstrumentMix = {
-  chord: true, bass: true, kick: true, snare: true, hihat: true, vinyl: true, melody: true, counter: true,
-};
-
-const DEFAULT_PARAMS: EngineParams = {
-  bpm: 85,
-  mood: 'chill',
-  progressionId: 'warm-evening',
-  reverb: 0.5,
-  vinyl: 0.3,
-  tape: 0.35,
-  lowCut: 60,
-  highCut: 8000,
-  mix: DEFAULT_MIX,
-  octaveShift: 0,
-  melodyOctave: 0,
-  chordLength: 1.5,
-  chordTiming: 0.3,
-  drumProb: { kick: 1, snare: 1, hihat: 1 },
-  keyShift: 0,
-  bassStyle: 'simple',
-  songForm: false,
-  timeSignature: '4/4',
-};
 
 export default function App() {
   const [playing, setPlaying] = useState(false);
-  const [params, setParams] = useState<EngineParams>(DEFAULT_PARAMS);
+  const [params, setParams] = useState<EngineParams>(() => ({
+    ...DEFAULT_PARAMS,
+    ...parseParamsFromSearch(typeof window !== 'undefined' ? window.location.search : ''),
+  }));
   const [chordIndex, setChordIndex] = useState(0);
   const [sectionInfo, setSectionInfo] = useState<SectionInfo | null>(null);
   const engineRef = useRef<LofiEngine | null>(null);
   const rafRef = useRef<number>(0);
   const prevChordRef = useRef(-1);
   const prevSectionKeyRef = useRef('');
+  const urlHydratedRef = useRef(false);
 
   function trackStep() {
     if (engineRef.current) {
@@ -78,7 +59,17 @@ export default function App() {
   const handleParamChange = useCallback((update: Partial<EngineParams>) => {
     setParams(prev => {
       const next = { ...prev, ...update };
-      engineRef.current?.updateParams(update);
+      if ('seed' in update && (update.seed === undefined || update.seed === '')) {
+        delete next.seed;
+      }
+      const forEngine =
+        'seed' in update
+          ? {
+              ...update,
+              seed: update.seed === undefined || update.seed === '' ? undefined : update.seed,
+            }
+          : update;
+      engineRef.current?.updateParams(forEngine);
       return next;
     });
   }, []);
@@ -89,6 +80,16 @@ export default function App() {
       cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!urlHydratedRef.current) {
+      urlHydratedRef.current = true;
+      return;
+    }
+    const qs = serializeParamsToSearch(params);
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, '', url);
+  }, [params]);
 
   return (
     <div className="app">
@@ -124,3 +125,4 @@ export default function App() {
     </div>
   );
 }
+

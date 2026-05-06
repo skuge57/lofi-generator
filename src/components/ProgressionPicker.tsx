@@ -1,4 +1,4 @@
-import { PROGRESSIONS, transposeChordName } from '../engine/musicTheory';
+import { PROGRESSIONS, romanNumeralForChord, transposeChordName } from '../engine/musicTheory';
 import type { SectionInfo } from '../engine/types';
 
 interface ProgressionPickerProps {
@@ -30,7 +30,8 @@ export function ProgressionPicker({ progressionId, activeChordIndex, playing, ke
             key={i}
             className={`chord-name ${playing && i === activeChordIndex ? 'active' : ''}`}
           >
-            {transposeChordName(chord.name, keyShift)}
+            <span className="chord-symbol">{transposeChordName(chord.name, keyShift)}</span>
+            <span className="chord-roman">{romanNumeralForChord(chord.name, keyShift)}</span>
           </span>
         ))}
       </div>
@@ -42,7 +43,8 @@ export function ProgressionPicker({ progressionId, activeChordIndex, playing, ke
             className={`prog-btn ${p.id === progressionId ? 'selected' : ''}`}
             onClick={() => onChange(p.id)}
           >
-            {p.label}
+            <span>{p.label}</span>
+            <span className="prog-roman">{p.chords.map(chord => romanNumeralForChord(chord.name, keyShift)).join(' - ')}</span>
           </button>
         ))}
       </div>
