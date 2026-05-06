@@ -108,6 +108,23 @@ function randomizeInstrumentVolume(): EngineParams['instrumentVolume'] {
   }, {} as EngineParams['instrumentVolume']);
 }
 
+function autoMixVolumes(params: EngineParams): EngineParams['instrumentVolume'] {
+  const { mix, instrumentVolume, reverb, tape, crush } = params;
+  // High effects density builds up perceived loudness — compensate with lower fader levels
+  const effectsLoad =
+    Math.max(0, reverb - 0.5) * 0.5 +
+    Math.max(0, tape - 0.4) * 0.4 +
+    crush * 0.6;
+  // Stacking many harmonic layers crowds the mix
+  const activeHarmonic = (['chord', 'bass', 'melody', 'counter'] as const).filter(k => mix[k]).length;
+  const harmonicLoad = Math.max(0, activeHarmonic - 2) * 0.07;
+  const scale = 1 - Math.min(effectsLoad + harmonicLoad, 0.3);
+  return INSTRUMENT_KEYS.reduce((vol, key) => {
+    vol[key] = Number(Math.min(1.5, Math.max(0, instrumentVolume[key] * scale)).toFixed(2));
+    return vol;
+  }, {} as EngineParams['instrumentVolume']);
+}
+
 function randomizeParams(current: EngineParams, locks: RandomizeLocks): EngineParams {
   const next: EngineParams = {
     ...current,
@@ -183,6 +200,8 @@ function randomizeParams(current: EngineParams, locks: RandomizeLocks): EnginePa
     next.highCut = current.highCut;
     next.mix = { ...current.mix };
     next.instrumentVolume = { ...current.instrumentVolume };
+  } else {
+    next.instrumentVolume = autoMixVolumes(next);
   }
 
   return next;

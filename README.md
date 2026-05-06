@@ -69,7 +69,7 @@ Rough roadmap, no promises:
 - [ ] **Saturation / drive stage** — add tape warmth, soft clipping, speaker dirt, and optional per-instrument drive before the master limiter
 - [ ] **Vinyl scene presets** — layer procedural ambience such as dusty record, rainy window, cafe room, train ambience, distant street, fireplace, or late-night room tone
 - [ ] **Stereo width controls** — widen pads and texture while keeping kick, snare, and bass mono-safe, with a master mono-check button
-- [ ] **Auto-mix** — rebalance instrument levels and prevent clipping after randomizing aggressive settings
+- [x] **Auto-mix** — rebalance instrument levels and prevent clipping after randomizing aggressive settings
 - [x] **Tape wow & flutter** — slow pitch modulation on the master bus to emulate worn cassette
 - [x] **Sidechain ducking** — gentle pump on chords/bass triggered by the kick
 - [x] **Bitcrusher / sample-rate reduction** — optional lo-fi destruction on the master
