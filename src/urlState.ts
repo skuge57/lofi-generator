@@ -130,6 +130,10 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
     if (Number.isFinite(n)) out.chordTiming = Math.max(0, Math.min(1, n));
   }
 
+  const sidechain = q.get('sidechain') ?? q.get('sc');
+  if (sidechain === '1' || sidechain === 'true') out.sidechainDucking = true;
+  if (sidechain === '0' || sidechain === 'false') out.sidechainDucking = false;
+
   const swing = q.get('swing') ?? q.get('sw');
   if (swing !== null && swing !== '') {
     const n = Number(swing);
@@ -227,6 +231,7 @@ export function serializeParamsToSearch(params: EngineParams): string {
   if (params.melodyOctave !== d.melodyOctave) q.set('moct', String(params.melodyOctave));
   if (!numEq(params.chordLength, d.chordLength)) q.set('clen', String(params.chordLength));
   if (!numEq(params.chordTiming, d.chordTiming)) q.set('ctime', String(params.chordTiming));
+  if (params.sidechainDucking !== d.sidechainDucking) q.set('sc', params.sidechainDucking ? '1' : '0');
   if (!numEq(params.swing, d.swing)) q.set('sw', String(params.swing));
   if (
     !numEq(params.drumProb.kick, d.drumProb.kick) ||

@@ -30,6 +30,7 @@ export const DEFAULT_PARAMS: EngineParams = {
   melodyOctave: 0,
   chordLength: 1.5,
   chordTiming: 0.3,
+  sidechainDucking: true,
   swing: 0,
   drumProb: { kick: 1, snare: 1, hihat: 1 },
   keyShift: 0,

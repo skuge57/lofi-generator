@@ -402,6 +402,16 @@ export function RhythmControls({ params, onChange }: ControlsProps) {
         ))}
       </div>
 
+      <div className="song-form-row">
+        <button
+          className={`song-form-btn ${params.sidechainDucking ? 'active' : ''}`}
+          onClick={() => onChange({ sidechainDucking: !params.sidechainDucking })}
+        >
+          Sidechain: {params.sidechainDucking ? 'on' : 'off'}
+        </button>
+        <InfoTip text="Kick-triggered ducking on the chord pad and bass for a gentle lo-fi pump." />
+      </div>
+
       <span className="section-label section-label-row">
         <span>Drums</span>
         <InfoTip text="Each slider is the chance that drum hits actually fire when the pattern asks for them. Lower values thin out the beat randomly." />

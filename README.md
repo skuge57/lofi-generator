@@ -15,7 +15,7 @@ Built with React 19, TypeScript, and Vite.
 - **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, kick/snare dropped) → A (8). Transition sections end on a snare-roll fill that telegraphs the next section.
 - **Energy curve** — a single energy control shapes the song form by section, morphing drum density, hi-hat activity, melody activity, and filter brightness over the arrangement
 - **Per-instrument toggles** — mute chords, bass, kick, snare, hi-hat, melody, counter-melody, or vinyl crackle independently
-- **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, drum hit probability, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
+- **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, sidechain ducking, drum hit probability, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
 - **Seeded sharing** — a seed field plus URL-serialized settings make beats reproducible and easy to share
 - **Randomize** — generate a new full parameter set, including a fresh seed, from the header button
 - **Visual feedback** — current chord highlighted while the progression plays

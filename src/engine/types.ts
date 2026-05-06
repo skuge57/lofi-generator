@@ -43,6 +43,7 @@ export interface EngineParams {
   octaveShift: number;
   chordLength: number;
   chordTiming: number;
+  sidechainDucking: boolean;
   swing: number;
   melodyOctave: number;
   drumProb: { kick: number; snare: number; hihat: number };

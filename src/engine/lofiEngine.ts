@@ -78,6 +78,7 @@ export class LofiEngine {
   private currentMelodyOctave = 0;
   private currentChordLength = 1.5;
   private currentChordTiming = 0;
+  private currentSidechainDucking = true;
   private currentDrumProb = { kick: 1, snare: 1, hihat: 1 };
   private currentKeyShift = 0;
   private currentBassStyle: BassStyle = 'simple';
@@ -158,6 +159,7 @@ export class LofiEngine {
     this.currentMelodyOctave = params.melodyOctave;
     this.currentChordLength = params.chordLength;
     this.currentChordTiming = params.chordTiming;
+    this.currentSidechainDucking = params.sidechainDucking;
     this.currentDrumProb = { ...params.drumProb };
     this.currentKeyShift = params.keyShift;
     this.currentBassStyle = params.bassStyle;
@@ -648,6 +650,8 @@ export class LofiEngine {
   }
 
   private triggerSidechain(time: number, intensity = 1): void {
+    if (!this.currentSidechainDucking) return;
+
     const amount = clamp(intensity, 0, 1);
     const attackAt = time + SIDECHAIN_ATTACK_SECONDS;
     const releaseAt = attackAt + SIDECHAIN_RELEASE_SECONDS;
@@ -661,6 +665,14 @@ export class LofiEngine {
     this.bassSidechain.gain.cancelAndHoldAtTime(time);
     this.bassSidechain.gain.linearRampToValueAtTime(bassFloor, attackAt);
     this.bassSidechain.gain.exponentialRampToValueAtTime(1, releaseAt);
+  }
+
+  private resetSidechain(time = Tone.now(), rampTime = 0.04): void {
+    const endAt = time + rampTime;
+    this.chordSidechain.gain.cancelAndHoldAtTime(time);
+    this.chordSidechain.gain.linearRampToValueAtTime(1, endAt);
+    this.bassSidechain.gain.cancelAndHoldAtTime(time);
+    this.bassSidechain.gain.linearRampToValueAtTime(1, endAt);
   }
 
   private applyTape(amount: number, rampTime = 0.2): void {
@@ -1184,6 +1196,10 @@ export class LofiEngine {
     }
     if (params.chordTiming !== undefined) {
       this.currentChordTiming = params.chordTiming;
+    }
+    if (params.sidechainDucking !== undefined) {
+      this.currentSidechainDucking = params.sidechainDucking;
+      if (!params.sidechainDucking) this.resetSidechain();
     }
     if (params.chordVoice !== undefined && params.chordVoice !== this.currentChordVoice) {
       this.applyChordVoice(params.chordVoice);
