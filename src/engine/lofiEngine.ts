@@ -1250,7 +1250,9 @@ export class LofiEngine {
   }
 
   updateParams(params: Partial<EngineParams>): void {
-    const seedTouched = params.seed !== undefined;
+    const seedTouched =
+      Object.prototype.hasOwnProperty.call(params, 'seed') &&
+      params.seed !== this.snap.seed;
     this.mergeSnap(params);
     let needsRebuild = false;
     let needsSequenceRestart = false;

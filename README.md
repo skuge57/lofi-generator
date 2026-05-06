@@ -17,7 +17,7 @@ Built with React 19, TypeScript, and Vite.
 - **Per-instrument mix controls** — mute chords, bass, kick, snare, hi-hat, melody, counter-melody, or vinyl crackle independently, then trim each instrument from 0–150%
 - **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, sidechain ducking, drum hit probability, per-instrument volume, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
 - **Seeded sharing** — a seed field plus URL-serialized settings make beats reproducible and easy to share
-- **Randomize** — generate a new full parameter set, including a fresh seed, from the header button
+- **Lockable randomize** — generate a fresh parameter set from the header button while locking BPM, chords, drums, bass, melody, or tone / mix groups you want to keep
 - **Visual feedback** — current chord highlighted while the progression plays
 - **Cached scheduler data** — harmonic/rhythm data is pre-cached, and the melody/counter buffers are reused per bar so the 16th-note scheduler stays light
 
@@ -84,7 +84,7 @@ Rough roadmap, no promises:
 - [x] **Seeded generation + URL sharing** — a **seed** field and serialized URL settings reproduce/share the same beat, e.g. `/?seed=blue-cafe-4921&key=E&mood=sad`
 - [x] **Randomize** — one action generates a fresh full parameter set and seed
 - [x] **Per-instrument levels** — individual volume sliders for chords, bass, kick, snare, hi-hat, melody, counter-melody, and vinyl
-- [ ] **Lockable randomize** — toggles to **lock** BPM, chords, drums, bass, melody, and tone / mix settings so only unlocked parts change
+- [x] **Lockable randomize** — toggles to **lock** BPM, chords, drums, bass, melody, and tone / mix settings so only unlocked parts change
 - [ ] **Preset save/load** — store named full parameter sets in localStorage
 - [ ] **MIDI export** — render the current loop to a downloadable `.mid` file
 - [ ] **WAV/MP3 capture** — record N bars to an audio file via `OfflineAudioContext`

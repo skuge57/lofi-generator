@@ -27,6 +27,37 @@ const CHORD_VOICES: ChordVoice[] = [
   'glass-pad',
 ];
 const REHARM_FLAVORS: ReharmFlavor[] = ['diatonic', 'jazzy', 'darker', 'dreamy', 'spicy'];
+const INSTRUMENT_KEYS: (keyof EngineParams['mix'])[] = [
+  'chord',
+  'bass',
+  'kick',
+  'snare',
+  'hihat',
+  'vinyl',
+  'melody',
+  'counter',
+];
+
+type RandomizeLockKey = 'bpm' | 'chords' | 'drums' | 'bass' | 'melody' | 'toneMix';
+type RandomizeLocks = Record<RandomizeLockKey, boolean>;
+
+const RANDOMIZE_LOCKS: { key: RandomizeLockKey; label: string }[] = [
+  { key: 'bpm', label: 'BPM' },
+  { key: 'chords', label: 'Chords' },
+  { key: 'drums', label: 'Drums' },
+  { key: 'bass', label: 'Bass' },
+  { key: 'melody', label: 'Melody' },
+  { key: 'toneMix', label: 'Tone / mix' },
+];
+
+const DEFAULT_RANDOMIZE_LOCKS: RandomizeLocks = {
+  bpm: false,
+  chords: false,
+  drums: false,
+  bass: false,
+  melody: false,
+  toneMix: false,
+};
 
 function choice<T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)];
@@ -45,10 +76,42 @@ function randomSeed(): string {
   return `lofi-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function randomizeParams(current: EngineParams): EngineParams {
-  return {
+function randomizeMix(): EngineParams['mix'] {
+  const mix: EngineParams['mix'] = {
+    chord: Math.random() < 0.88,
+    bass: Math.random() < 0.88,
+    kick: Math.random() < 0.92,
+    snare: Math.random() < 0.88,
+    hihat: Math.random() < 0.86,
+    vinyl: Math.random() < 0.78,
+    melody: Math.random() < 0.82,
+    counter: Math.random() < 0.66,
+  };
+
+  if (!mix.chord && !mix.bass && !mix.melody && !mix.counter) {
+    mix[choice(['chord', 'bass', 'melody'] as const)] = true;
+  }
+  if (!mix.kick && !mix.snare && !mix.hihat) {
+    mix.kick = true;
+    mix.snare = true;
+  }
+
+  return mix;
+}
+
+function randomizeInstrumentVolume(): EngineParams['instrumentVolume'] {
+  return INSTRUMENT_KEYS.reduce((volume, key) => {
+    volume[key] = key === 'vinyl'
+      ? randomStepped(0.35, 1, 0.05)
+      : randomStepped(0.65, 1.25, 0.05);
+    return volume;
+  }, {} as EngineParams['instrumentVolume']);
+}
+
+function randomizeParams(current: EngineParams, locks: RandomizeLocks): EngineParams {
+  const next: EngineParams = {
     ...current,
-    seed: randomSeed(),
+    seed: locks.melody ? current.seed : randomSeed(),
     bpm: randomInt(68, 104),
     mood: choice(MOODS),
     progressionId: choice(PROGRESSIONS).id,
@@ -75,7 +138,54 @@ function randomizeParams(current: EngineParams): EngineParams {
     bassStyle: choice(BASS_STYLES),
     energy: randomInt(35, 95),
     timeSignature: choice(TIME_SIGNATURES),
+    mix: randomizeMix(),
+    instrumentVolume: randomizeInstrumentVolume(),
   };
+
+  if (locks.bpm) {
+    next.bpm = current.bpm;
+  }
+
+  if (locks.chords) {
+    next.keyShift = current.keyShift;
+    next.progressionId = current.progressionId;
+    next.reharmFlavor = current.reharmFlavor;
+    next.chordVoice = current.chordVoice;
+    next.voiceLeading = current.voiceLeading;
+    next.octaveShift = current.octaveShift;
+    next.chordLength = current.chordLength;
+    next.chordTiming = current.chordTiming;
+  }
+
+  if (locks.drums) {
+    next.mood = current.mood;
+    next.timeSignature = current.timeSignature;
+    next.swing = current.swing;
+    next.energy = current.energy;
+    next.drumProb = { ...current.drumProb };
+  }
+
+  if (locks.bass) {
+    next.bassStyle = current.bassStyle;
+  }
+
+  if (locks.melody) {
+    next.seed = current.seed;
+    next.melodyOctave = current.melodyOctave;
+  }
+
+  if (locks.toneMix) {
+    next.reverb = current.reverb;
+    next.vinyl = current.vinyl;
+    next.tape = current.tape;
+    next.crush = current.crush;
+    next.lowCut = current.lowCut;
+    next.highCut = current.highCut;
+    next.mix = { ...current.mix };
+    next.instrumentVolume = { ...current.instrumentVolume };
+  }
+
+  return next;
 }
 
 function clampMasterVolume(value: number) {
@@ -104,6 +214,7 @@ export default function App() {
   }));
   const [chordIndex, setChordIndex] = useState(0);
   const [sectionInfo, setSectionInfo] = useState<SectionInfo | null>(null);
+  const [randomizeLocks, setRandomizeLocks] = useState<RandomizeLocks>(DEFAULT_RANDOMIZE_LOCKS);
   const engineRef = useRef<LofiEngine | null>(null);
   const rafRef = useRef<number>(0);
   const prevChordRef = useRef(-1);
@@ -163,10 +274,14 @@ export default function App() {
 
   const handleRandomize = useCallback(() => {
     setParams(prev => {
-      const next = randomizeParams(prev);
+      const next = randomizeParams(prev, randomizeLocks);
       engineRef.current?.updateParams(next);
       return next;
     });
+  }, [randomizeLocks]);
+
+  const handleRandomizeLockToggle = useCallback((key: RandomizeLockKey) => {
+    setRandomizeLocks(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
   useEffect(() => {
@@ -216,9 +331,26 @@ export default function App() {
       <div className="app-header">
         <h1 className="title">lofi.</h1>
         <div className="header-actions">
-          <button type="button" className="randomize-btn" onClick={handleRandomize}>
-            Randomize
-          </button>
+          <div className="randomize-cluster">
+            <button type="button" className="randomize-btn" onClick={handleRandomize}>
+              Randomize
+            </button>
+            <div className="randomize-locks" aria-label="Randomize locks">
+              <span className="randomize-locks-label">Locks</span>
+              {RANDOMIZE_LOCKS.map(lock => (
+                <button
+                  key={lock.key}
+                  type="button"
+                  className={`randomize-lock ${randomizeLocks[lock.key] ? 'locked' : ''}`}
+                  aria-pressed={randomizeLocks[lock.key]}
+                  aria-label={`${randomizeLocks[lock.key] ? 'Unlock' : 'Lock'} ${lock.label} during randomize`}
+                  onClick={() => handleRandomizeLockToggle(lock.key)}
+                >
+                  {lock.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <Player playing={playing} onToggle={handleToggle} />
         </div>
       </div>

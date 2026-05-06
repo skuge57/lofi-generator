@@ -36,6 +36,60 @@ body {
   gap: 14px;
 }
 
+.randomize-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.randomize-locks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  max-width: 520px;
+}
+
+.randomize-locks-label {
+  color: #5a4a3a;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-right: 2px;
+}
+
+.randomize-lock {
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid #3a3028;
+  background: transparent;
+  color: #6a5a4a;
+  font-family: inherit;
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.randomize-lock:hover {
+  border-color: #c8a87a88;
+  color: #c8a87a;
+}
+
+.randomize-lock.locked {
+  border-color: #c8a87a;
+  background: #c8a87a18;
+  color: #e0c090;
+}
+
+.randomize-lock:active {
+  transform: translateY(1px);
+}
+
 .app-columns {
   display: grid;
   grid-template-columns: minmax(250px, 0.92fr) minmax(340px, 1.18fr) minmax(300px, 1fr);
@@ -750,7 +804,12 @@ input[type='range']::-moz-range-thumb {
   }
 
   .header-actions {
+    align-items: flex-end;
     gap: 10px;
+  }
+
+  .randomize-locks {
+    max-width: 330px;
   }
 
   .play-btn {
@@ -763,6 +822,12 @@ input[type='range']::-moz-range-thumb {
     height: 36px;
     padding: 0 10px;
     font-size: 0.68rem;
+  }
+
+  .randomize-lock {
+    height: 23px;
+    padding: 0 6px;
+    font-size: 0.56rem;
   }
 
   .app-columns,
