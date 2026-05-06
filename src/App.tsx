@@ -16,7 +16,16 @@ const MASTER_VOLUME_KEY_STEP = 0.05;
 const MOODS: Mood[] = ['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy'];
 const TIME_SIGNATURES: TimeSignature[] = ['4/4', '3/4', '5/4', '6/8'];
 const BASS_STYLES: BassStyle[] = ['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal'];
-const CHORD_VOICES: ChordVoice[] = ['rhodes', 'wurlitzer', 'muted-guitar', 'vibraphone'];
+const CHORD_VOICES: ChordVoice[] = [
+  'rhodes',
+  'wurlitzer',
+  'muted-guitar',
+  'vibraphone',
+  'tape-choir',
+  'juno-strings',
+  'organ',
+  'glass-pad',
+];
 const REHARM_FLAVORS: ReharmFlavor[] = ['diatonic', 'jazzy', 'darker', 'dreamy', 'spicy'];
 
 function choice<T>(items: readonly T[]): T {

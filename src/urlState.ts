@@ -18,7 +18,16 @@ const TIME_SIG_DECODE: Record<string, TimeSignature> = {
 
 const MOODS = new Set<Mood>(['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy']);
 const BASS = new Set<BassStyle>(['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal']);
-const CHORD_VOICES = new Set<ChordVoice>(['rhodes', 'wurlitzer', 'muted-guitar', 'vibraphone']);
+const CHORD_VOICES = new Set<ChordVoice>([
+  'rhodes',
+  'wurlitzer',
+  'muted-guitar',
+  'vibraphone',
+  'tape-choir',
+  'juno-strings',
+  'organ',
+  'glass-pad',
+]);
 const REHARM_FLAVORS = new Set<ReharmFlavor>(['diatonic', 'jazzy', 'darker', 'dreamy', 'spicy']);
 
 function encodeMix(mix: EngineParams['mix']): string {

@@ -15,6 +15,10 @@ const CHORD_VOICES: { value: ChordVoice; label: string }[] = [
   { value: 'wurlitzer', label: 'Wurli' },
   { value: 'muted-guitar', label: 'Guitar' },
   { value: 'vibraphone', label: 'Vibes' },
+  { value: 'tape-choir', label: 'Choir' },
+  { value: 'juno-strings', label: 'Strings' },
+  { value: 'organ', label: 'Organ' },
+  { value: 'glass-pad', label: 'Glass' },
 ];
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 interface WheelRangeProps {
@@ -168,7 +172,7 @@ export function RightControls({ params, onChange }: ControlsProps) {
       <span className="section-label">Tone</span>
       <span className="section-label section-label-row">
         <span>Pad voice</span>
-        <InfoTip text="Chooses the chord instrument: warm Rhodes, brighter Wurlitzer, short muted guitar, or bell-like vibraphone." />
+        <InfoTip text="Chooses the chord instrument: keys, guitar, vibes, tape choir, strings, organ, or glassy FM pad." />
       </span>
       <div className="chord-voice-grid" role="group" aria-label="Chord pad voice">
         {CHORD_VOICES.map(voice => (

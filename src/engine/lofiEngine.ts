@@ -400,6 +400,61 @@ export class LofiEngine {
       return synth;
     }
 
+    if (voice === 'tape-choir') {
+      const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'fatsine', count: 4, spread: 24 },
+        envelope: { attack: 1.15, decay: 0.7, sustain: 0.9, release: 3.4 },
+        volume: -16.5,
+      });
+      synth.maxPolyphony = 14;
+      this.chordTremolo.frequency.value = 0.46;
+      this.chordTremolo.depth.value = 0.12;
+      return synth;
+    }
+
+    if (voice === 'juno-strings') {
+      const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'fatsawtooth', count: 4, spread: 28 },
+        envelope: { attack: 0.34, decay: 0.55, sustain: 0.66, release: 2.1 },
+        volume: -18,
+      });
+      synth.maxPolyphony = 12;
+      this.chordTremolo.frequency.value = 0.82;
+      this.chordTremolo.depth.value = 0.18;
+      return synth;
+    }
+
+    if (voice === 'organ') {
+      const synth = new Tone.PolySynth(Tone.AMSynth, {
+        harmonicity: 1.5,
+        oscillator: { type: 'square' },
+        envelope: { attack: 0.003, decay: 0.02, sustain: 0.98, release: 0.12 },
+        modulation: { type: 'sine' },
+        modulationEnvelope: { attack: 0.001, decay: 0.03, sustain: 0.55, release: 0.08 },
+        volume: -16,
+      });
+      synth.maxPolyphony = 10;
+      this.chordTremolo.frequency.value = 6.7;
+      this.chordTremolo.depth.value = 0.48;
+      return synth;
+    }
+
+    if (voice === 'glass-pad') {
+      const synth = new Tone.PolySynth(Tone.FMSynth, {
+        harmonicity: 7.01,
+        modulationIndex: 12,
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.006, decay: 1.7, sustain: 0.02, release: 2.9 },
+        modulation: { type: 'sine' },
+        modulationEnvelope: { attack: 0.002, decay: 1.15, sustain: 0, release: 2.1 },
+        volume: -21,
+      });
+      synth.maxPolyphony = 10;
+      this.chordTremolo.frequency.value = 7.8;
+      this.chordTremolo.depth.value = 0.08;
+      return synth;
+    }
+
     const synth = new Tone.PolySynth(Tone.FMSynth, {
       harmonicity: 3.5,
       modulationIndex: 5,
@@ -923,6 +978,18 @@ export class LofiEngine {
         this.chordSynth.triggerAttackRelease(shiftedNotes, Math.min(this.currentChordLength, 0.88), chordTime, 0.76 + this.rnd() * 0.08);
       } else if (this.currentChordVoice === 'vibraphone') {
         this.chordSynth.triggerAttackRelease(shiftedNotes, Math.max(0.8, Math.min(this.currentChordLength, 1.8)), chordTime, 0.54 + this.rnd() * 0.08);
+      } else if (this.currentChordVoice === 'tape-choir') {
+        const choirNotes = shiftedNotes.map((note, i) => this.transpose(note, i === shiftedNotes.length - 1 ? -12 : 0));
+        this.chordSynth.triggerAttackRelease(choirNotes, Math.max(2.4, this.currentChordLength + 1.2), chordTime - 0.04, 0.42 + this.rnd() * 0.05);
+      } else if (this.currentChordVoice === 'juno-strings') {
+        this.chordSynth.triggerAttackRelease(shiftedNotes, Math.max(1.2, this.currentChordLength + 0.35), chordTime, 0.42 + this.rnd() * 0.06);
+      } else if (this.currentChordVoice === 'organ') {
+        const organNotes = shiftedNotes.slice(0, 3);
+        this.chordSynth.triggerAttackRelease(organNotes, Math.min(this.currentChordLength, 0.72), chordTime, 0.62 + this.rnd() * 0.06);
+      } else if (this.currentChordVoice === 'glass-pad') {
+        const glassNotes = shiftedNotes.map(note => this.transpose(note, 12));
+        const sparkle = this.transpose(shiftedNotes[shiftedNotes.length - 1], 24);
+        this.chordSynth.triggerAttackRelease([...glassNotes, sparkle], Math.max(0.9, Math.min(this.currentChordLength, 1.35)), chordTime, 0.36 + this.rnd() * 0.05);
       } else {
         this.chordSynth.triggerAttackRelease(shiftedNotes, this.currentChordLength, chordTime, 0.5 + this.rnd() * 0.1);
       }

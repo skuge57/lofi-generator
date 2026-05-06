@@ -2,7 +2,15 @@ export type Mood = 'chill' | 'sad' | 'jazzy' | 'dreamy' | 'rainy' | 'dusty' | 'u
 export type TimeSignature = '4/4' | '3/4' | '5/4' | '6/8';
 export type BassStyle = 'simple' | 'walking' | 'lazy' | 'bounce' | 'dub' | 'pedal';
 export type ReharmFlavor = 'diatonic' | 'jazzy' | 'darker' | 'dreamy' | 'spicy';
-export type ChordVoice = 'rhodes' | 'wurlitzer' | 'muted-guitar' | 'vibraphone';
+export type ChordVoice =
+  | 'rhodes'
+  | 'wurlitzer'
+  | 'muted-guitar'
+  | 'vibraphone'
+  | 'tape-choir'
+  | 'juno-strings'
+  | 'organ'
+  | 'glass-pad';
 
 export interface InstrumentMix {
   chord: boolean;

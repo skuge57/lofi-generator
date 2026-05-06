@@ -48,7 +48,7 @@ The audio engine (`src/engine/lofiEngine.ts`) drives a `Tone.Sequence` at 16th n
 
 - Chord progressions and rhythm patterns live in `src/engine/musicTheory.ts`
 - The signal chain is: instruments → per-instrument gates → highpass → lowpass → tape wow/flutter → bitcrusher → limiter → master volume → output, with reverb fed in parallel as a send.
-- The chord pad uses an FM synth into a tremolo for that wobbly Rhodes feel; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, MetalSynth hat); vinyl texture layers filtered pink-noise dust with intermittent clicks, low pops, and brief dropouts
+- The chord pad can switch between Rhodes/Wurli-style keys, sampled muted guitar, vibes, tape choir, synth strings, organ, and glassy FM tones; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, MetalSynth hat); vinyl texture layers filtered pink-noise dust with intermittent clicks, low pops, and brief dropouts
 
 ## Future plans
 
@@ -59,7 +59,7 @@ Rough roadmap, no promises:
 - [x] **Tape wow & flutter** — slow pitch modulation on the master bus to emulate worn cassette
 - [ ] **Sidechain ducking** — gentle pump on chords/bass triggered by the kick
 - [x] **Bitcrusher / sample-rate reduction** — optional lo-fi destruction on the master
-- [x] **More instrument voices** — Wurlitzer, muted guitar, vibraphone alternatives for the chord pad
+- [x] **More instrument voices** — Wurlitzer, muted guitar, vibraphone, tape choir, Juno strings, organ, and glass pad alternatives for the chord pad
 - [x] **Better vinyl** — intermittent clicks, pops, and dropouts layered with noise, not just steady filtered crackle
 
 ### Composition
