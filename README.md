@@ -14,8 +14,8 @@ Built with React 19, TypeScript, and Vite.
 - **Counter-melody** — a soft second voice that harmonizes key lead notes and replies in nearby rests, staying a third or sixth below on chord tones
 - **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, kick/snare dropped) → A (8). Transition sections end on a snare-roll fill that telegraphs the next section.
 - **Energy curve** — a single energy control shapes the song form by section, morphing drum density, hi-hat activity, melody activity, and filter brightness over the arrangement
-- **Per-instrument toggles** — mute chords, bass, kick, snare, hi-hat, melody, counter-melody, or vinyl crackle independently
-- **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, sidechain ducking, drum hit probability, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
+- **Per-instrument mix controls** — mute chords, bass, kick, snare, hi-hat, melody, counter-melody, or vinyl crackle independently, then trim each instrument from 0–150%
+- **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, sidechain ducking, drum hit probability, per-instrument volume, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
 - **Seeded sharing** — a seed field plus URL-serialized settings make beats reproducible and easy to share
 - **Randomize** — generate a new full parameter set, including a fresh seed, from the header button
 - **Visual feedback** — current chord highlighted while the progression plays
@@ -54,8 +54,8 @@ The audio engine (`src/engine/lofiEngine.ts`) drives a `Tone.Sequence` at 16th n
 
 - Chord progressions and rhythm patterns live in `src/engine/musicTheory.ts`
 - The signal chain is: instruments → per-instrument gates → highpass → lowpass → tape wow/flutter → bitcrusher → limiter → master volume → output, with reverb fed in parallel as a send.
-- The chord pad can switch between Rhodes/Wurli-style keys, sampled muted guitar, vibes, tape choir, synth strings, organ, and glassy FM tones; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, MetalSynth hat); vinyl texture layers filtered pink-noise dust with intermittent clicks, low pops, and brief dropouts
-- `src/urlState.ts` serializes most controls into the URL, including seed, mood, key, progression, reharmonization, voice, time signature, bass style, arrangement, mix, and tone settings
+- The chord pad can switch between Rhodes/Wurli-style keys, sampled muted guitar, vibes, tape choir, synth strings, organ, and glassy FM tones; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, filtered NoiseSynth hat); vinyl texture layers filtered pink-noise dust with intermittent clicks, low pops, and brief dropouts
+- `src/urlState.ts` serializes most controls into the URL, including seed, mood, key, progression, reharmonization, voice, time signature, bass style, arrangement, mutes, per-instrument volumes, and tone settings
 
 ## Future plans
 
@@ -83,6 +83,7 @@ Rough roadmap, no promises:
 ### UX
 - [x] **Seeded generation + URL sharing** — a **seed** field and serialized URL settings reproduce/share the same beat, e.g. `/?seed=blue-cafe-4921&key=E&mood=sad`
 - [x] **Randomize** — one action generates a fresh full parameter set and seed
+- [x] **Per-instrument levels** — individual volume sliders for chords, bass, kick, snare, hi-hat, melody, counter-melody, and vinyl
 - [ ] **Lockable randomize** — toggles to **lock** BPM, chords, drums, bass, melody, and tone / mix settings so only unlocked parts change
 - [ ] **Preset save/load** — store named full parameter sets in localStorage
 - [ ] **MIDI export** — render the current loop to a downloadable `.mid` file
