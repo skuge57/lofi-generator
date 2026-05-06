@@ -356,18 +356,17 @@ export class LofiEngine {
 
   private createChordSynth(voice: ChordVoice): ChordSynth {
     if (voice === 'wurlitzer') {
-      const synth = new Tone.PolySynth(Tone.FMSynth, {
-        harmonicity: 0.8,
-        modulationIndex: 16,
-        oscillator: { type: 'fatsawtooth', count: 2, spread: 12 },
-        envelope: { attack: 0.003, decay: 0.16, sustain: 0.28, release: 0.45 },
-        modulation: { type: 'square' },
-        modulationEnvelope: { attack: 0.001, decay: 0.12, sustain: 0.14, release: 0.22 },
-        volume: -12,
+      const synth = new Tone.PolySynth(Tone.AMSynth, {
+        harmonicity: 1.24,
+        oscillator: { type: 'fattriangle', count: 2, spread: 8 },
+        envelope: { attack: 0.004, decay: 0.18, sustain: 0.38, release: 0.42 },
+        modulation: { type: 'sine' },
+        modulationEnvelope: { attack: 0.006, decay: 0.16, sustain: 0.16, release: 0.24 },
+        volume: -4.5,
       });
-      synth.maxPolyphony = 6;
-      this.chordTremolo.frequency.value = 5.8;
-      this.chordTremolo.depth.value = 0.1;
+      synth.maxPolyphony = 10;
+      this.chordTremolo.frequency.value = 4.7;
+      this.chordTremolo.depth.value = 0.16;
       return synth;
     }
 
@@ -854,7 +853,7 @@ export class LofiEngine {
           });
         }
       } else if (this.currentChordVoice === 'wurlitzer') {
-        this.chordSynth.triggerAttackRelease(shiftedNotes, Math.min(this.currentChordLength, 1.05), chordTime, 0.58 + this.rnd() * 0.08);
+        this.chordSynth.triggerAttackRelease(shiftedNotes, Math.min(this.currentChordLength, 0.88), chordTime, 0.76 + this.rnd() * 0.08);
       } else if (this.currentChordVoice === 'vibraphone') {
         this.chordSynth.triggerAttackRelease(shiftedNotes, Math.max(0.8, Math.min(this.currentChordLength, 1.8)), chordTime, 0.54 + this.rnd() * 0.08);
       } else {
