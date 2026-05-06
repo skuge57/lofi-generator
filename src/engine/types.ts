@@ -25,7 +25,25 @@ export interface EngineParams {
   melodyOctave: number;
   drumProb: { kick: number; snare: number; hihat: number };
   keyShift: number;
-  bassStyle: 'simple' | 'walking';
+  bassStyle: 'simple' | 'walking' | 'lazy';
+  songForm: boolean;
+}
+
+export interface SongSection {
+  id: string;
+  label: string;
+  bars: number;
+  mutes?: (keyof InstrumentMix)[];
+  drumDensity?: number;
+  fillOnLastBar?: boolean;
+}
+
+export interface SectionInfo {
+  id: string;
+  label: string;
+  index: number;
+  barInSection: number;
+  totalBars: number;
 }
 
 export interface ChordVoicing {

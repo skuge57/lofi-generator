@@ -4,7 +4,7 @@ import { Player } from './components/Player';
 import { LeftControls, RightControls } from './components/Controls';
 import { InstrumentToggles } from './components/InstrumentToggles';
 import { ProgressionPicker } from './components/ProgressionPicker';
-import type { EngineParams, InstrumentMix } from './engine/types';
+import type { EngineParams, InstrumentMix, SectionInfo } from './engine/types';
 import './App.css';
 
 const DEFAULT_MIX: InstrumentMix = {
@@ -27,20 +27,29 @@ const DEFAULT_PARAMS: EngineParams = {
   drumProb: { kick: 1, snare: 1, hihat: 1 },
   keyShift: 0,
   bassStyle: 'simple',
+  songForm: false,
 };
 
 export default function App() {
   const [playing, setPlaying] = useState(false);
   const [params, setParams] = useState<EngineParams>(DEFAULT_PARAMS);
   const [chordIndex, setChordIndex] = useState(0);
+  const [sectionInfo, setSectionInfo] = useState<SectionInfo | null>(null);
   const engineRef = useRef<LofiEngine | null>(null);
   const rafRef = useRef<number>(0);
   const prevChordRef = useRef(-1);
+  const prevSectionKeyRef = useRef('');
 
   const trackStep = useCallback(() => {
     if (engineRef.current) {
       const c = engineRef.current.getChordIndex();
       if (c !== prevChordRef.current) { prevChordRef.current = c; setChordIndex(c); }
+      const s = engineRef.current.getSectionInfo();
+      const key = s ? `${s.index}:${s.barInSection}` : '';
+      if (key !== prevSectionKeyRef.current) {
+        prevSectionKeyRef.current = key;
+        setSectionInfo(s);
+      }
     }
     rafRef.current = requestAnimationFrame(trackStep);
   }, []);
@@ -52,6 +61,8 @@ export default function App() {
       engineRef.current = null;
       cancelAnimationFrame(rafRef.current);
       prevChordRef.current = -1;
+      prevSectionKeyRef.current = '';
+      setSectionInfo(null);
       setPlaying(false);
     } else {
       const engine = new LofiEngine(params);
@@ -92,6 +103,7 @@ export default function App() {
             activeChordIndex={chordIndex}
             playing={playing}
             keyShift={params.keyShift}
+            sectionInfo={sectionInfo}
             onChange={id => handleParamChange({ progressionId: id })}
           />
         </div>

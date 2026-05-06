@@ -234,6 +234,53 @@ input[type='range']::-moz-range-thumb {
   border-bottom: 1px solid #2e2820;
 }
 
+.section-indicator {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px 6px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.section-name {
+  color: #e0c090;
+  font-weight: 600;
+}
+
+.section-progress {
+  color: #6a5a4a;
+  font-size: 0.65rem;
+}
+
+.song-form-btn {
+  padding: 8px 12px;
+  border: 1px solid #3a3028;
+  background: transparent;
+  color: #8a7060;
+  font-family: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.song-form-btn:hover {
+  border-color: #c8a87a;
+  color: #c8a87a;
+}
+
+.song-form-btn.active {
+  border-color: #c8a87a;
+  background: #c8a87a18;
+  color: #e0c090;
+}
+
 .chord-name {
   font-size: 0.85rem;
   color: #6a5a4a;

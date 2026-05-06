@@ -1,9 +1,12 @@
 import * as Tone from 'tone';
-import { getProgressionById, getPattern } from './musicTheory';
-import type { EngineParams, Mood, ProgressionDef, RhythmPattern } from './types';
+import { getProgressionById, getPattern, SONG_ARRANGEMENT, locateSection } from './musicTheory';
+import type { EngineParams, Mood, ProgressionDef, RhythmPattern, SectionInfo, InstrumentMix } from './types';
 
 const STEPS = 16;
 const WALKING_STEPS = [0, 4, 8, 12];
+// Lazy walking: just two notes per bar — downbeat root, then a syncopated
+// approach/fifth on the "and of 3" so it feels behind the beat.
+const LAZY_STEPS = [0, 10];
 
 export class LofiEngine {
   private chordSynth: Tone.PolySynth<Tone.FMSynth>;
@@ -31,9 +34,16 @@ export class LofiEngine {
   private currentChordTiming = 0;
   private currentDrumProb = { kick: 1, snare: 1, hihat: 1 };
   private currentKeyShift = 0;
-  private currentBassStyle: 'simple' | 'walking' = 'simple';
+  private currentBassStyle: 'simple' | 'walking' | 'lazy' = 'simple';
   private currentStep = 0;
   private chordIndex = 0;
+
+  // Song-form state
+  private songFormEnabled = false;
+  private currentBar = 0;
+  private sectionIdx = 0;
+  private barInSection = 0;
+  private isFillBar = false;
 
   // Pre-computed caches — rebuilt only when params change, never in tick()
   private cachedProg!: ProgressionDef;
@@ -62,6 +72,7 @@ export class LofiEngine {
     this.currentDrumProb = { ...params.drumProb };
     this.currentKeyShift = params.keyShift;
     this.currentBassStyle = params.bassStyle;
+    this.songFormEnabled = params.songForm;
 
     // Effects chain: instruments → gates → highpass → lowpass → reverb → limiter
     // Chorus removed from master bus — it processed all instruments simultaneously.
@@ -181,44 +192,93 @@ export class LofiEngine {
     this.gates.vinyl.gain.rampTo(mix.vinyl ? this._vinylLevel : 0, 0.05);
   }
 
+  // Combines the user's mix with the active section's mute overrides. On a
+  // fill bar the muted instruments come back so the fill is audible.
+  private effectiveMix(): InstrumentMix {
+    if (!this.songFormEnabled) return this._mix;
+    const sec = SONG_ARRANGEMENT[this.sectionIdx];
+    if (!sec.mutes || sec.mutes.length === 0 || this.isFillBar) return this._mix;
+    const eff = { ...this._mix };
+    for (const k of sec.mutes) eff[k] = false;
+    return eff;
+  }
+
+  private applyEffectiveMix(): void {
+    this.applyMix(this.effectiveMix());
+  }
+
+  private updateSection(): void {
+    if (!this.songFormEnabled) {
+      this.sectionIdx = 0;
+      this.barInSection = 0;
+      this.isFillBar = false;
+      return;
+    }
+    const { index, barInSection } = locateSection(this.currentBar);
+    this.sectionIdx = index;
+    this.barInSection = barInSection;
+    const sec = SONG_ARRANGEMENT[index];
+    this.isFillBar = !!sec.fillOnLastBar && barInSection === sec.bars - 1;
+  }
+
   private transpose(note: string, semitones: number): string {
     if (semitones === 0) return note;
     return Tone.Frequency(note).transpose(semitones).toNote() as string;
   }
 
-  // Uses pre-computed cachedMelodyNotes/Freqs; reuses melodyPatternBuf without allocating.
-  // Finds the two closest notes to prevMelodyNote via linear scan instead of spread+sort.
+  // Generates 1–2 short directional phrases per bar instead of a random per-step walk.
+  // Each phrase moves mostly stepwise (ascending or descending) through the sorted note pool,
+  // ending on a longer note for a sense of resolution.
   private generateMelodyPattern(): void {
-    const DURATIONS = ['8n', '4n', '4n', '4n', '2n'] as const;
     this.melodyPatternBuf.fill(null);
-    let prev = this.prevMelodyNote;
-    let prevHz = prev ? Tone.Frequency(prev).toFrequency() : 0;
-    let i = 0;
 
-    while (i < STEPS) {
-      if (Math.random() < 0.4) {
-        let noteIdx: number;
-        if (prev) {
-          let best0 = 0, best1 = 0;
-          let bestDist0 = Infinity, bestDist1 = Infinity;
-          for (let j = 0; j < this.cachedMelodyFreqs.length; j++) {
-            const dist = Math.abs(this.cachedMelodyFreqs[j] - prevHz);
-            if (dist < bestDist0) { bestDist1 = bestDist0; best1 = best0; bestDist0 = dist; best0 = j; }
-            else if (dist < bestDist1) { bestDist1 = dist; best1 = j; }
-          }
-          noteIdx = Math.random() < 0.5 && this.cachedMelodyNotes.length > 1 ? best1 : best0;
-        } else {
-          noteIdx = Math.floor(Math.random() * this.cachedMelodyNotes.length);
-        }
-        const dur = DURATIONS[Math.floor(Math.random() * DURATIONS.length)];
-        this.melodyPatternBuf[i] = { note: this.cachedMelodyNotes[noteIdx], dur };
-        prev = this.cachedMelodyNotes[noteIdx];
-        prevHz = this.cachedMelodyFreqs[noteIdx];
-        const stepSpan = dur === '2n' ? 8 : dur === '4n' ? 4 : 2;
-        i += stepSpan;
-      } else {
-        i++;
+    // Sort note indices by pitch so we can navigate by direction
+    const sorted = Array.from({ length: this.cachedMelodyNotes.length }, (_, i) => i)
+      .sort((a, b) => this.cachedMelodyFreqs[a] - this.cachedMelodyFreqs[b]);
+    const poolLen = sorted.length;
+
+    // Start position: closest pitch to where we left off last bar
+    const prevFreq = this.prevMelodyNote
+      ? Tone.Frequency(this.prevMelodyNote).toFrequency()
+      : this.cachedMelodyFreqs[sorted[Math.floor(poolLen / 2)]];
+    let pos = sorted.reduce((best, idx, p) =>
+      Math.abs(this.cachedMelodyFreqs[idx] - prevFreq) <
+      Math.abs(this.cachedMelodyFreqs[sorted[best]] - prevFreq) ? p : best, 0);
+
+    let step = Math.floor(Math.random() * 3); // small initial offset for feel
+    const phraseCount = 1 + (Math.random() < 0.55 ? 1 : 0);
+
+    for (let p = 0; p < phraseCount; p++) {
+      if (step >= STEPS - 2) break;
+
+      let dir = Math.random() < 0.5 ? 1 : -1;
+      const phraseLen = 2 + Math.floor(Math.random() * 3); // 2–4 notes
+
+      for (let ni = 0; ni < phraseLen; ni++) {
+        if (step >= STEPS) break;
+
+        const isLast = ni === phraseLen - 1;
+        // Phrase ends on a quarter or half note; interior notes use eighths or quarters
+        const dur = isLast
+          ? (Math.random() < 0.5 ? '4n' : '2n')
+          : (Math.random() < 0.55 ? '4n' : '8n');
+
+        this.melodyPatternBuf[step] = {
+          note: this.cachedMelodyNotes[sorted[pos]],
+          dur,
+        };
+        this.prevMelodyNote = this.cachedMelodyNotes[sorted[pos]];
+        step += dur === '2n' ? 8 : dur === '4n' ? 4 : 2;
+
+        // Mostly step motion (1 pitch position), occasionally skip (2)
+        const jump = Math.random() < 0.7 ? 1 : 2;
+        pos = Math.max(0, Math.min(poolLen - 1, pos + dir * jump));
+        // Reverse at boundaries or occasionally mid-phrase
+        if (pos === 0 || pos === poolLen - 1 || Math.random() < 0.2) dir = -dir;
       }
+
+      // Rest gap between phrases
+      step += 2 + Math.floor(Math.random() * 5);
     }
   }
 
@@ -227,8 +287,11 @@ export class LofiEngine {
     await Tone.start();
     this.vinyl.start();
     this.currentStep = 0;
-    this.chordIndex = 0;
+    this.chordIndex = this.cachedProg.chords.length - 1;
     this.prevMelodyNote = null;
+    this.currentBar = 0;
+    this.updateSection();
+    this.applyEffectiveMix();
     this.generateMelodyPattern();
 
     this.sequence = new Tone.Sequence(
@@ -258,20 +321,40 @@ export class LofiEngine {
     if (step === 0) {
       this.chordIndex = (this.chordIndex + 1) % this.cachedProg.chords.length;
       this.generateMelodyPattern();
+      if (this.songFormEnabled) {
+        this.currentBar++;
+        const prevSection = this.sectionIdx;
+        const prevFill = this.isFillBar;
+        this.updateSection();
+        if (this.sectionIdx !== prevSection || this.isFillBar !== prevFill) {
+          this.applyEffectiveMix();
+        }
+      }
     }
 
     const shiftedNotes = this.cachedChordNotes[this.chordIndex];
 
-    if (this.cachedPattern.kick[step] && Math.random() < this.currentDrumProb.kick) {
+    const drumScale = this.songFormEnabled
+      ? (SONG_ARRANGEMENT[this.sectionIdx].drumDensity ?? 1)
+      : 1;
+
+    if (this.cachedPattern.kick[step] && Math.random() < this.currentDrumProb.kick * drumScale) {
       this.kick.triggerAttackRelease('C1', '8n', time);
     }
 
-    if (this.cachedPattern.snare[step] && Math.random() < this.currentDrumProb.snare) {
+    if (this.cachedPattern.snare[step] && Math.random() < this.currentDrumProb.snare * drumScale) {
       this.snare.triggerAttackRelease('8n', time);
     }
 
-    if (this.cachedPattern.hihat[step] && Math.random() < this.currentDrumProb.hihat) {
+    if (this.cachedPattern.hihat[step] && Math.random() < this.currentDrumProb.hihat * drumScale) {
       this.hihat.triggerAttackRelease('32n', time, 0.3 + Math.random() * 0.2);
+    }
+
+    // Snare-roll fill on the last beat of a fill bar, telegraphing the next section.
+    if (this.isFillBar && step >= 12) {
+      const vel = 0.32 + (step - 12) * 0.16;
+      this.snare.triggerAttackRelease('16n', time, vel);
+      if (step === 12) this.kick.triggerAttackRelease('C1', '16n', time, 0.6);
     }
 
     if (this.cachedChordStepSet.has(step)) {
@@ -289,6 +372,16 @@ export class LofiEngine {
         else bassNote = this.cachedBassApproach[(this.chordIndex + 1) % this.cachedProg.chords.length];
         this.bassSynth.triggerAttackRelease(bassNote, '4n', time, 0.75);
       }
+    } else if (this.currentBassStyle === 'lazy') {
+      const lazyPos = LAZY_STEPS.indexOf(step);
+      if (lazyPos === 0) {
+        // Long sustained root on the downbeat
+        this.bassSynth.triggerAttackRelease(this.cachedBassRoots[this.chordIndex], '2n', time, 0.7);
+      } else if (lazyPos === 1) {
+        // Syncopated fifth, dragged feel via small late jitter
+        const drag = Math.random() * 0.02;
+        this.bassSynth.triggerAttackRelease(this.cachedBassFifths[this.chordIndex], '4n', time + drag, 0.6);
+      }
     } else {
       const interval = this.cachedBassStepToInterval.get(step);
       if (interval !== undefined) {
@@ -300,7 +393,7 @@ export class LofiEngine {
     const melHit = this.melodyPatternBuf[step];
     if (melHit !== null) {
       const jitter = Math.random() * this.currentChordTiming * 0.08;
-      this.melodySynth.triggerAttackRelease(melHit.note, melHit.dur, time + jitter, 0.3 + Math.random() * 0.1);
+      this.melodySynth.triggerAttackRelease(melHit.note, melHit.dur, time + jitter, 0.45 + Math.random() * 0.15);
       this.prevMelodyNote = melHit.note;
     }
   }
@@ -357,14 +450,21 @@ export class LofiEngine {
     }
     if (params.mix !== undefined) {
       this._mix = params.mix;
-      this.applyMix(params.mix);
+      this.applyEffectiveMix();
     }
     if (params.bassStyle !== undefined) {
       this.currentBassStyle = params.bassStyle;
     }
+    if (params.songForm !== undefined && params.songForm !== this.songFormEnabled) {
+      this.songFormEnabled = params.songForm;
+      if (this.songFormEnabled) this.currentBar = 0;
+      this.updateSection();
+      this.applyEffectiveMix();
+    }
 
     if (needsRebuild) {
       this.rebuildCache();
+      this.chordIndex = this.cachedProg.chords.length - 1;
       this.generateMelodyPattern();
     }
   }
@@ -375,6 +475,18 @@ export class LofiEngine {
 
   getChordIndex(): number {
     return this.chordIndex;
+  }
+
+  getSectionInfo(): SectionInfo | null {
+    if (!this.songFormEnabled) return null;
+    const sec = SONG_ARRANGEMENT[this.sectionIdx];
+    return {
+      id: sec.id,
+      label: sec.label,
+      index: this.sectionIdx,
+      barInSection: this.barInSection,
+      totalBars: sec.bars,
+    };
   }
 
   dispose(): void {

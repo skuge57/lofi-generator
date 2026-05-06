@@ -1,4 +1,4 @@
-import type { Mood, ProgressionDef, RhythmPattern } from './types';
+import type { Mood, ProgressionDef, RhythmPattern, SongSection } from './types';
 
 export const PROGRESSIONS: ProgressionDef[] = [
   {
@@ -162,4 +162,29 @@ export function getProgressionById(id: string): ProgressionDef {
 
 export function getPattern(mood: Mood): RhythmPattern {
   return PATTERNS[mood];
+}
+
+// Song arrangement: a fixed A/B/bridge form that loops. Each section can mute
+// instruments, thin out the drum probability, and optionally trigger a snare
+// fill on its last bar to telegraph the next section.
+export const SONG_ARRANGEMENT: SongSection[] = [
+  { id: 'intro',  label: 'Intro',  bars: 4, mutes: ['kick', 'snare', 'hihat'], fillOnLastBar: true },
+  { id: 'A',      label: 'A',      bars: 8 },
+  { id: 'B',      label: 'B',      bars: 8, drumDensity: 0.65 },
+  { id: 'A',      label: 'A',      bars: 8 },
+  { id: 'bridge', label: 'Bridge', bars: 4, mutes: ['kick', 'snare'], drumDensity: 0.6, fillOnLastBar: true },
+  { id: 'A',      label: 'A',      bars: 8 },
+];
+
+const ARRANGEMENT_TOTAL_BARS = SONG_ARRANGEMENT.reduce((s, sec) => s + sec.bars, 0);
+
+export function locateSection(bar: number): { index: number; barInSection: number } {
+  const pos = ((bar % ARRANGEMENT_TOTAL_BARS) + ARRANGEMENT_TOTAL_BARS) % ARRANGEMENT_TOTAL_BARS;
+  let cum = 0;
+  for (let i = 0; i < SONG_ARRANGEMENT.length; i++) {
+    const len = SONG_ARRANGEMENT[i].bars;
+    if (pos < cum + len) return { index: i, barInSection: pos - cum };
+    cum += len;
+  }
+  return { index: 0, barInSection: 0 };
 }

@@ -49,6 +49,15 @@ export function LeftControls({ params, onChange }: ControlsProps) {
           </button>
         ))}
       </div>
+
+      <span className="section-label">Arrangement</span>
+      <button
+        className={`song-form-btn ${params.songForm ? 'active' : ''}`}
+        onClick={() => onChange({ songForm: !params.songForm })}
+        title="Auto-arrange into A/B/bridge sections with drum drops and fills"
+      >
+        Song form: {params.songForm ? 'on' : 'off'}
+      </button>
     </div>
   );
 }
@@ -169,6 +178,12 @@ export function RightControls({ params, onChange }: ControlsProps) {
           onClick={() => onChange({ bassStyle: 'walking' })}
         >
           walking
+        </button>
+        <button
+          className={`mood-btn ${params.bassStyle === 'lazy' ? 'active' : ''}`}
+          onClick={() => onChange({ bassStyle: 'lazy' })}
+        >
+          lazy
         </button>
       </div>
 
