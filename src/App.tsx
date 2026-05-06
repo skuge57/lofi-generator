@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { LofiEngine } from './engine/lofiEngine';
 import { Player } from './components/Player';
-import { LeftControls, RightControls } from './components/Controls';
+import { LeftControls, RhythmControls, RightControls } from './components/Controls';
 import { InstrumentToggles } from './components/InstrumentToggles';
 import { ProgressionPicker } from './components/ProgressionPicker';
 import { PROGRESSIONS } from './engine/musicTheory';
@@ -245,6 +245,7 @@ export default function App() {
             mix={params.mix}
             onChange={mix => handleParamChange({ mix })}
           />
+          <RhythmControls params={params} onChange={handleParamChange} />
         </div>
 
         <div className="right-panel">

@@ -378,6 +378,13 @@ export function RightControls({ params, onChange }: ControlsProps) {
         <span className="val" />
       </div>
 
+    </div>
+  );
+}
+
+export function RhythmControls({ params, onChange }: ControlsProps) {
+  return (
+    <div className="controls rhythm-controls">
       <span className="section-label section-label-row">
         <span>Bass</span>
         <InfoTip text="Bass line vocabulary: Simple is roots/fifths; Walking outlines changes; Lazy uses long notes; Bounce is syncopated; Dub leaves space; Pedal hammers the root with accents." />
