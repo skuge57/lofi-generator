@@ -67,7 +67,7 @@ Rough roadmap, no promises:
 - [x] **Song sections** — A / B / bridge structure with automatic arrangement (drops drums for 4 bars, brings them back with a snare-roll fill)
 - [x] **Energy curve** — evolve the track over the form instead of static playback: intro sparse; verse / A normal; B with more hats and melody; bridge filtered; return with fuller drums. Driven by a single **energy** value (0–100) that morphs density, filter, and pattern weights by section
 - [x] **Chord reharmonization** — optional flavor per progression: *diatonic*, *jazzy*, *darker*, *dreamy*, *spicy* — e.g. swap plain V for V13, tritone substitutions, or passing diminished chords while keeping the same Roman skeleton
-- [ ] **Voice-leading mode** — choose close inversions so pad voices move stepwise between changes instead of big jumps; warmer, more “played” pads
+- [x] **Voice-leading mode** — choose close inversions so pad voices move stepwise between changes instead of big jumps; warmer, more "played" pads
 - [x] **Smarter melody** — motif development (repeat-and-vary) instead of fresh phrases each bar; tension/release shaping toward chord tones
 - [x] **Counter-melody / second voice** — soft harmony line a third or sixth below the lead
 - [x] **Swing / shuffle amount** — variable 16th-note swing slider

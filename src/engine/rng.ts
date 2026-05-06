@@ -17,6 +17,7 @@ const RNG_FINGERPRINT_KEYS: (keyof EngineParams)[] = [
   'reharmFlavor',
   'songForm',
   'timeSignature',
+  'voiceLeading',
 ];
 
 function stableStringify(value: unknown): string {

@@ -67,6 +67,7 @@ export class LofiEngine {
   private currentProgressionId: string;
   private currentReharmFlavor: ReharmFlavor = 'diatonic';
   private currentChordVoice: ChordVoice = 'rhodes';
+  private currentVoiceLeading = false;
   private currentOctaveShift = 0;
   private currentMelodyOctave = 0;
   private currentChordLength = 1.5;
@@ -142,6 +143,7 @@ export class LofiEngine {
     this.currentProgressionId = params.progressionId;
     this.currentReharmFlavor = params.reharmFlavor;
     this.currentChordVoice = params.chordVoice;
+    this.currentVoiceLeading = params.voiceLeading;
     this.currentOctaveShift = params.octaveShift;
     this.currentMelodyOctave = params.melodyOctave;
     this.currentChordLength = params.chordLength;
@@ -481,9 +483,10 @@ export class LofiEngine {
       this.cachedPattern.bassSteps.map(b => [b.step, b.interval])
     );
     const chordSemi = this.currentOctaveShift * 12 + this.currentKeyShift;
-    this.cachedChordNotes = this.cachedProg.chords.map(chord =>
+    const chordNotes = this.cachedProg.chords.map(chord =>
       chord.notes.map(n => this.transpose(n, chordSemi))
     );
+    this.cachedChordNotes = this.currentVoiceLeading ? this.voiceLeadChords(chordNotes) : chordNotes;
     this.cachedBassRoots = this.cachedProg.bassRoots.map(n => this.transpose(n, this.currentKeyShift));
     this.cachedBassThirds = this.cachedProg.bassThirds.map(n => this.transpose(n, this.currentKeyShift));
     this.cachedBassFifths = this.cachedProg.bassFifths.map(n => this.transpose(n, this.currentKeyShift));
@@ -632,6 +635,70 @@ export class LofiEngine {
   private transpose(note: string, semitones: number): string {
     if (semitones === 0) return note;
     return Tone.Frequency(note).transpose(semitones).toNote() as string;
+  }
+
+  private midiToNote(midi: number): string {
+    return Tone.Frequency(midi, 'midi').toNote() as string;
+  }
+
+  private chordMovementScore(candidate: number[], previous: number[] | null, baseCenter: number): number {
+    const span = candidate[candidate.length - 1] - candidate[0];
+    const center = candidate.reduce((sum, midi) => sum + midi, 0) / candidate.length;
+    if (!previous) return span * 2 + Math.abs(center - baseCenter);
+
+    let movement = 0;
+    for (let i = 0; i < candidate.length; i++) {
+      movement += Math.abs(candidate[i] - previous[i]);
+    }
+    const prevCenter = previous.reduce((sum, midi) => sum + midi, 0) / previous.length;
+    return movement + span * 0.35 + Math.abs(center - prevCenter) * 0.3;
+  }
+
+  private closeInversionFor(notes: string[], previous: number[] | null): number[] {
+    const base: number[] = notes.map(note => Tone.Frequency(note).toMidi() as number).sort((a, b) => a - b);
+    const baseCenter = base.reduce((sum, midi) => sum + midi, 0) / base.length;
+    const candidates: number[][] = [];
+    const seen = new Set<string>();
+
+    const build = (i: number, midiNotes: number[]) => {
+      if (i === base.length) {
+        const candidate = [...midiNotes].sort((a, b) => a - b);
+        const key = candidate.join(',');
+        if (seen.has(key)) return;
+        seen.add(key);
+        const span = candidate[candidate.length - 1] - candidate[0];
+        if (span <= 19) candidates.push(candidate);
+        return;
+      }
+
+      for (let octave = -2; octave <= 2; octave++) {
+        midiNotes.push(base[i] + octave * 12);
+        build(i + 1, midiNotes);
+        midiNotes.pop();
+      }
+    };
+
+    build(0, []);
+    const pool = candidates.length > 0 ? candidates : [base];
+    let best = pool[0];
+    let bestScore = this.chordMovementScore(best, previous, baseCenter);
+    for (let i = 1; i < pool.length; i++) {
+      const score = this.chordMovementScore(pool[i], previous, baseCenter);
+      if (score < bestScore) {
+        best = pool[i];
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  private voiceLeadChords(chords: string[][]): string[][] {
+    let previous: number[] | null = null;
+    return chords.map(chord => {
+      const midiChord = this.closeInversionFor(chord, previous);
+      previous = midiChord;
+      return midiChord.map(midi => this.midiToNote(midi));
+    });
   }
 
   // Builds a fresh motif: a small directed melodic idea that we'll repeat (with
@@ -976,6 +1043,10 @@ export class LofiEngine {
     }
     if (params.chordVoice !== undefined && params.chordVoice !== this.currentChordVoice) {
       this.applyChordVoice(params.chordVoice);
+    }
+    if (params.voiceLeading !== undefined && params.voiceLeading !== this.currentVoiceLeading) {
+      this.currentVoiceLeading = params.voiceLeading;
+      needsRebuild = true;
     }
     if (params.swing !== undefined) {
       Tone.getTransport().swingSubdivision = '16n';

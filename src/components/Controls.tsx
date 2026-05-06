@@ -183,6 +183,16 @@ export function RightControls({ params, onChange }: ControlsProps) {
         ))}
       </div>
 
+      <div className="song-form-row">
+        <button
+          className={`song-form-btn ${params.voiceLeading ? 'active' : ''}`}
+          onClick={() => onChange({ voiceLeading: !params.voiceLeading })}
+        >
+          Voice leading: {params.voiceLeading ? 'on' : 'off'}
+        </button>
+        <InfoTip text="Chooses close chord inversions so pad voices move by smaller steps between changes." />
+      </div>
+
       <label className="slider-row">
         <span className="slider-label">
           <span className="slider-label-text">Master</span>

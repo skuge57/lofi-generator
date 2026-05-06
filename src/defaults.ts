@@ -17,6 +17,7 @@ export const DEFAULT_PARAMS: EngineParams = {
   progressionId: 'warm-evening',
   reharmFlavor: 'diatonic',
   chordVoice: 'rhodes',
+  voiceLeading: false,
   masterVolume: 1,
   reverb: 0.5,
   vinyl: 0.3,

@@ -45,6 +45,7 @@ function randomizeParams(current: EngineParams): EngineParams {
     progressionId: choice(PROGRESSIONS).id,
     reharmFlavor: choice(REHARM_FLAVORS),
     chordVoice: choice(CHORD_VOICES),
+    voiceLeading: Math.random() < 0.55,
     reverb: randomStepped(0.25, 0.85, 0.05),
     vinyl: randomStepped(0.15, 0.7, 0.05),
     tape: randomStepped(0.1, 0.75, 0.05),

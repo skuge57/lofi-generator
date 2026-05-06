@@ -71,6 +71,10 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
   const voice = q.get('voice') ?? q.get('cv');
   if (voice && CHORD_VOICES.has(voice as ChordVoice)) out.chordVoice = voice as ChordVoice;
 
+  const vl = q.get('voiceLeading') ?? q.get('vl');
+  if (vl === '1' || vl === 'true') out.voiceLeading = true;
+  if (vl === '0' || vl === 'false') out.voiceLeading = false;
+
   const bpm = q.get('bpm') ?? q.get('b');
   if (bpm !== null && bpm !== '') {
     const n = Number(bpm);
@@ -204,6 +208,7 @@ export function serializeParamsToSearch(params: EngineParams): string {
   if (params.progressionId !== d.progressionId) q.set('progression', params.progressionId);
   if (params.reharmFlavor !== d.reharmFlavor) q.set('reharm', params.reharmFlavor);
   if (params.chordVoice !== d.chordVoice) q.set('voice', params.chordVoice);
+  if (params.voiceLeading !== d.voiceLeading) q.set('vl', params.voiceLeading ? '1' : '0');
   if (params.bpm !== d.bpm) q.set('bpm', String(params.bpm));
   if (params.timeSignature !== d.timeSignature) q.set('ts', TIME_SIG_ENCODE[params.timeSignature]);
   if (params.bassStyle !== d.bassStyle) q.set('bass', params.bassStyle);

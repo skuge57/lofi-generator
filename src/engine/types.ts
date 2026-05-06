@@ -23,6 +23,7 @@ export interface EngineParams {
   progressionId: string;
   reharmFlavor: ReharmFlavor;
   chordVoice: ChordVoice;
+  voiceLeading: boolean;
   masterVolume: number;
   reverb: number;
   vinyl: number;
