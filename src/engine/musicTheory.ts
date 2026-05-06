@@ -11,6 +11,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       { name: 'Dm7',   notes: ['F3','A3','C4','E4'],  duration: '1n' },
     ],
     bassRoots:  ['F2','E2','A2','D2'],
+    bassThirds: ['A2','G2','C3','F2'],
     bassFifths: ['C3','B2','E3','A2'],
     melodyNotes: ['F5','G5','A5','C5','D5'],
   },
@@ -24,6 +25,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       { name: 'G7',    notes: ['F3','A3','B3','D4'],  duration: '1n' },
     ],
     bassRoots:  ['C2','A2','F2','G2'],
+    bassThirds: ['E2','C3','A2','B2'],
     bassFifths: ['G2','E3','C3','D3'],
     melodyNotes: ['C5','D5','E5','G5','A5'],
   },
@@ -37,6 +39,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       { name: 'Bb7',    notes: ['D4','F4','Ab4','C5'],  duration: '1n' },
     ],
     bassRoots:  ['Eb2','C2','Ab2','Bb2'],
+    bassThirds: ['G2','Eb2','C3','D3'],
     bassFifths: ['Bb2','G2','Eb3','F2'],
     melodyNotes: ['Eb5','F5','G5','Bb5','C5'],
   },
@@ -50,6 +53,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       { name: 'Cmaj7', notes: ['E4','G4','B4','D5'],  duration: '1n' },
     ],
     bassRoots:  ['A2','D2','G2','C2'],
+    bassThirds: ['C3','F2','B2','E2'],
     bassFifths: ['E3','A2','D3','G2'],
     melodyNotes: ['A5','C5','D5','E5','G5'],
   },
@@ -63,6 +67,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       { name: 'Dmaj7', notes: ['F#3','A3','C#4','E4'], duration: '1n' },
     ],
     bassRoots:  ['E2','C2','G2','D2'],
+    bassThirds: ['G2','E2','B2','F#2'],
     bassFifths: ['B2','G2','D3','A2'],
     melodyNotes: ['E5','F#5','G5','B5','D5'],
   },
@@ -76,6 +81,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       { name: 'Fmaj7', notes: ['A3','C4','E4','G4'],  duration: '1n' },
     ],
     bassRoots:  ['D2','G2','C2','F2'],
+    bassThirds: ['F2','Bb2','E2','A2'],
     bassFifths: ['A2','D3','G2','C3'],
     melodyNotes: ['D5','F5','G5','A5','C5'],
   },
@@ -89,6 +95,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       { name: 'G13',   notes: ['B3','D4','F4','A4'],  duration: '1n' },
     ],
     bassRoots:  ['C2','A2','D2','G2'],
+    bassThirds: ['E2','C3','F2','B2'],
     bassFifths: ['G2','E3','A2','D3'],
     melodyNotes: ['C5','D5','E5','G5','A5'],
   },
@@ -102,6 +109,7 @@ export const PROGRESSIONS: ProgressionDef[] = [
       { name: 'Am7',   notes: ['C4','E4','G4','B4'],  duration: '1n' },
     ],
     bassRoots:  ['D2','G2','C2','A2'],
+    bassThirds: ['F2','B2','E2','C3'],
     bassFifths: ['A2','D3','G2','E3'],
     melodyNotes: ['D5','F5','G5','A5','C5'],
   },
@@ -130,6 +138,23 @@ const PATTERNS: Record<Mood, RhythmPattern> = {
     bassSteps: [{ step: 0, interval: 0 }, { step: 6, interval: 0 }, { step: 8, interval: 1 }, { step: 12, interval: 0 }],
   },
 };
+
+const CHROMATIC = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const NOTE_SEMI: Record<string, number> = {
+  'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3,
+  'E': 4, 'F': 5, 'E#': 5, 'F#': 6, 'Gb': 6, 'G': 7,
+  'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11,
+};
+
+export function transposeChordName(chordName: string, semitones: number): string {
+  if (semitones === 0) return chordName;
+  const match = chordName.match(/^([A-G][#b]?)(.*)/);
+  if (!match) return chordName;
+  const [, root, quality] = match;
+  const semi = NOTE_SEMI[root];
+  if (semi === undefined) return chordName;
+  return CHROMATIC[(semi + semitones + 12) % 12] + quality;
+}
 
 export function getProgressionById(id: string): ProgressionDef {
   return PROGRESSIONS.find(p => p.id === id) ?? PROGRESSIONS[0];

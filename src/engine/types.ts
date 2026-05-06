@@ -24,6 +24,8 @@ export interface EngineParams {
   chordTiming: number;
   melodyOctave: number;
   drumProb: { kick: number; snare: number; hihat: number };
+  keyShift: number;
+  bassStyle: 'simple' | 'walking';
 }
 
 export interface ChordVoicing {
@@ -37,6 +39,7 @@ export interface ProgressionDef {
   label: string;
   chords: ChordVoicing[];
   bassRoots: string[];
+  bassThirds: string[];
   bassFifths: string[];
   melodyNotes: string[];
 }

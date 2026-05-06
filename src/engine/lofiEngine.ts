@@ -1,11 +1,13 @@
 import * as Tone from 'tone';
 import { getProgressionById, getPattern } from './musicTheory';
-import type { EngineParams, Mood } from './types';
+import type { EngineParams, Mood, ProgressionDef, RhythmPattern } from './types';
 
 const STEPS = 16;
+const WALKING_STEPS = [0, 4, 8, 12];
 
 export class LofiEngine {
-  private chordSynth: Tone.PolySynth;
+  private chordSynth: Tone.PolySynth<Tone.FMSynth>;
+  private chordTremolo: Tone.Tremolo;
   private bassSynth: Tone.MonoSynth;
   private melodySynth: Tone.Synth;
   private kick: Tone.MembraneSynth;
@@ -15,7 +17,6 @@ export class LofiEngine {
   private vinylGain: Tone.Gain;
 
   private reverb: Tone.Reverb;
-  private chorus: Tone.Chorus;
   private limiter: Tone.Limiter;
   private lowpass: Tone.Filter;
   private highpass: Tone.Filter;
@@ -29,11 +30,26 @@ export class LofiEngine {
   private currentChordLength = 1.5;
   private currentChordTiming = 0;
   private currentDrumProb = { kick: 1, snare: 1, hihat: 1 };
+  private currentKeyShift = 0;
+  private currentBassStyle: 'simple' | 'walking' = 'simple';
   private currentStep = 0;
   private chordIndex = 0;
 
-  // Melody state
-  private melodyPattern: ({ note: string; dur: string } | null)[] = new Array(STEPS).fill(null);
+  // Pre-computed caches — rebuilt only when params change, never in tick()
+  private cachedProg!: ProgressionDef;
+  private cachedPattern!: RhythmPattern;
+  private cachedChordStepSet!: Set<number>;
+  private cachedBassStepToInterval!: Map<number, number>;
+  private cachedChordNotes!: string[][];
+  private cachedBassRoots!: string[];
+  private cachedBassThirds!: string[];
+  private cachedBassFifths!: string[];
+  private cachedBassApproach!: string[];
+  private cachedMelodyNotes!: string[];
+  private cachedMelodyFreqs!: number[];
+
+  // Pre-allocated melody pattern buffer — cleared and reused each bar
+  private melodyPatternBuf: ({ note: string; dur: string } | null)[] = new Array(STEPS).fill(null);
   private prevMelodyNote: string | null = null;
 
   constructor(params: EngineParams) {
@@ -44,13 +60,15 @@ export class LofiEngine {
     this.currentChordLength = params.chordLength;
     this.currentChordTiming = params.chordTiming;
     this.currentDrumProb = { ...params.drumProb };
+    this.currentKeyShift = params.keyShift;
+    this.currentBassStyle = params.bassStyle;
 
-    // Effects chain: instruments → gates → highpass → lowpass → chorus → reverb → limiter
+    // Effects chain: instruments → gates → highpass → lowpass → reverb → limiter
+    // Chorus removed from master bus — it processed all instruments simultaneously.
+    // The chord tremolo still provides movement on the pad specifically.
     this.limiter = new Tone.Limiter(-3).toDestination();
-    this.reverb = new Tone.Reverb({ decay: 3.5, wet: params.reverb }).connect(this.limiter);
-    this.chorus = new Tone.Chorus(1.5, 2.5, 0.15).connect(this.reverb);
-    this.chorus.start();
-    this.lowpass = new Tone.Filter(params.highCut, 'lowpass').connect(this.chorus);
+    this.reverb = new Tone.Reverb({ decay: 0.7, wet: params.reverb }).connect(this.limiter);
+    this.lowpass = new Tone.Filter(params.highCut, 'lowpass').connect(this.reverb);
     this.highpass = new Tone.Filter(params.lowCut, 'highpass').connect(this.lowpass);
 
     const g = (on: boolean) => new Tone.Gain(on ? 1 : 0).connect(this.highpass);
@@ -64,12 +82,20 @@ export class LofiEngine {
       vinyl:  new Tone.Gain(params.mix.vinyl ? params.vinyl * 0.03 : 0).connect(this.limiter),
     };
 
-    // Chord pad
-    this.chordSynth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'triangle' },
-      envelope: { attack: 0.08, decay: 0.3, sustain: 0.6, release: 1.2 },
-      volume: -14,
-    }).connect(this.gates.chord);
+    // Rhodes chord pad: FM synth with tremolo
+    // maxPolyphony 6 = 4 notes + 2 overlap slots during release (down from 8)
+    this.chordSynth = new Tone.PolySynth(Tone.FMSynth, {
+      harmonicity: 3.5,
+      modulationIndex: 5,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.001, decay: 0.35, sustain: 0.45, release: 1.2 },
+      modulation: { type: 'sine' },
+      modulationEnvelope: { attack: 0.002, decay: 0.3, sustain: 0.1, release: 1.0 },
+      volume: -12,
+    });
+    this.chordSynth.maxPolyphony = 6;
+    this.chordTremolo = new Tone.Tremolo(4, 0.3).connect(this.gates.chord).start();
+    this.chordSynth.connect(this.chordTremolo);
 
     // Bass
     this.bassSynth = new Tone.MonoSynth({
@@ -79,7 +105,7 @@ export class LofiEngine {
       volume: -10,
     }).connect(this.gates.bass);
 
-    // Melody — soft sine lead, one octave above chords
+    // Melody — soft sine lead
     this.melodySynth = new Tone.Synth({
       oscillator: { type: 'sine' },
       envelope: { attack: 0.05, decay: 0.3, sustain: 0.55, release: 1.4 },
@@ -120,10 +146,33 @@ export class LofiEngine {
     this._vinylLevel = params.vinyl * 0.03;
     this._mix = params.mix;
     this.applyMix(params.mix);
+
+    this.rebuildCache();
   }
 
   private _vinylLevel = 0.01;
   private _mix: EngineParams['mix'];
+
+  private rebuildCache(): void {
+    this.cachedProg = getProgressionById(this.currentProgressionId);
+    this.cachedPattern = getPattern(this.currentMood);
+    this.cachedChordStepSet = new Set(this.cachedPattern.chordSteps);
+    this.cachedBassStepToInterval = new Map(
+      this.cachedPattern.bassSteps.map(b => [b.step, b.interval])
+    );
+    const chordSemi = this.currentOctaveShift * 12 + this.currentKeyShift;
+    this.cachedChordNotes = this.cachedProg.chords.map(chord =>
+      chord.notes.map(n => this.transpose(n, chordSemi))
+    );
+    this.cachedBassRoots = this.cachedProg.bassRoots.map(n => this.transpose(n, this.currentKeyShift));
+    this.cachedBassThirds = this.cachedProg.bassThirds.map(n => this.transpose(n, this.currentKeyShift));
+    this.cachedBassFifths = this.cachedProg.bassFifths.map(n => this.transpose(n, this.currentKeyShift));
+    // Approach note = 1 semitone below each chord's (already key-shifted) root
+    this.cachedBassApproach = this.cachedBassRoots.map(n => this.transpose(n, -1));
+    const melSemi = this.currentMelodyOctave * 12 + this.currentKeyShift;
+    this.cachedMelodyNotes = this.cachedProg.melodyNotes.map(n => this.transpose(n, melSemi));
+    this.cachedMelodyFreqs = this.cachedMelodyNotes.map(n => Tone.Frequency(n).toFrequency());
+  }
 
   private applyMix(mix: EngineParams['mix']): void {
     (['chord', 'bass', 'kick', 'snare', 'hihat', 'melody'] as const).forEach(k => {
@@ -132,37 +181,45 @@ export class LofiEngine {
     this.gates.vinyl.gain.rampTo(mix.vinyl ? this._vinylLevel : 0, 0.05);
   }
 
-  private generateMelodyPattern(melodyNotes: string[]): void {
-    const DURATIONS = ['8n', '4n', '4n', '4n', '2n'];
-    const pattern: ({ note: string; dur: string } | null)[] = new Array(STEPS).fill(null);
+  private transpose(note: string, semitones: number): string {
+    if (semitones === 0) return note;
+    return Tone.Frequency(note).transpose(semitones).toNote() as string;
+  }
+
+  // Uses pre-computed cachedMelodyNotes/Freqs; reuses melodyPatternBuf without allocating.
+  // Finds the two closest notes to prevMelodyNote via linear scan instead of spread+sort.
+  private generateMelodyPattern(): void {
+    const DURATIONS = ['8n', '4n', '4n', '4n', '2n'] as const;
+    this.melodyPatternBuf.fill(null);
     let prev = this.prevMelodyNote;
+    let prevHz = prev ? Tone.Frequency(prev).toFrequency() : 0;
     let i = 0;
 
     while (i < STEPS) {
       if (Math.random() < 0.4) {
-        let note: string;
+        let noteIdx: number;
         if (prev) {
-          const prevHz = Tone.Frequency(prev).toFrequency();
-          const sorted = [...melodyNotes].sort(
-            (a, b) => Math.abs(Tone.Frequency(a).toFrequency() - prevHz)
-                    - Math.abs(Tone.Frequency(b).toFrequency() - prevHz)
-          );
-          note = sorted[Math.floor(Math.random() * Math.min(2, sorted.length))];
+          let best0 = 0, best1 = 0;
+          let bestDist0 = Infinity, bestDist1 = Infinity;
+          for (let j = 0; j < this.cachedMelodyFreqs.length; j++) {
+            const dist = Math.abs(this.cachedMelodyFreqs[j] - prevHz);
+            if (dist < bestDist0) { bestDist1 = bestDist0; best1 = best0; bestDist0 = dist; best0 = j; }
+            else if (dist < bestDist1) { bestDist1 = dist; best1 = j; }
+          }
+          noteIdx = Math.random() < 0.5 && this.cachedMelodyNotes.length > 1 ? best1 : best0;
         } else {
-          note = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
+          noteIdx = Math.floor(Math.random() * this.cachedMelodyNotes.length);
         }
         const dur = DURATIONS[Math.floor(Math.random() * DURATIONS.length)];
-        pattern[i] = { note, dur };
-        prev = note;
-
-        // Advance by the duration so longer notes block out subsequent steps
+        this.melodyPatternBuf[i] = { note: this.cachedMelodyNotes[noteIdx], dur };
+        prev = this.cachedMelodyNotes[noteIdx];
+        prevHz = this.cachedMelodyFreqs[noteIdx];
         const stepSpan = dur === '2n' ? 8 : dur === '4n' ? 4 : 2;
         i += stepSpan;
       } else {
         i++;
       }
     }
-    this.melodyPattern = pattern;
   }
 
   async start(): Promise<void> {
@@ -171,10 +228,7 @@ export class LofiEngine {
     this.currentStep = 0;
     this.chordIndex = 0;
     this.prevMelodyNote = null;
-
-    // Generate first bar's melody before the sequence starts
-    const prog = getProgressionById(this.currentProgressionId);
-    this.generateMelodyPattern(prog.melodyNotes);
+    this.generateMelodyPattern();
 
     this.sequence = new Tone.Sequence(
       (time, step) => {
@@ -198,83 +252,85 @@ export class LofiEngine {
     this.chordSynth.releaseAll();
   }
 
+  // tick() is called on every 16th note step. It must not allocate — all data comes from caches.
   private tick(time: number, step: number): void {
-    const pattern = getPattern(this.currentMood);
-    const prog = getProgressionById(this.currentProgressionId);
-
-    // Advance chord every 16 steps (1 bar) and generate next melody pattern
     if (step === 0) {
-      this.chordIndex = (this.chordIndex + 1) % prog.chords.length;
-      this.generateMelodyPattern(prog.melodyNotes);
+      this.chordIndex = (this.chordIndex + 1) % this.cachedProg.chords.length;
+      this.generateMelodyPattern();
     }
 
-    const chord = prog.chords[this.chordIndex];
-    const semitones = this.currentOctaveShift * 12;
-    const shiftedNotes = semitones === 0
-      ? chord.notes
-      : chord.notes.map(n => Tone.Frequency(n).transpose(semitones).toNote());
+    const shiftedNotes = this.cachedChordNotes[this.chordIndex];
 
-    // Kick
-    if (pattern.kick[step] && Math.random() < this.currentDrumProb.kick) {
+    if (this.cachedPattern.kick[step] && Math.random() < this.currentDrumProb.kick) {
       this.kick.triggerAttackRelease('C1', '8n', time);
     }
 
-    // Snare
-    if (pattern.snare[step] && Math.random() < this.currentDrumProb.snare) {
+    if (this.cachedPattern.snare[step] && Math.random() < this.currentDrumProb.snare) {
       this.snare.triggerAttackRelease('8n', time);
     }
 
-    // Hi-hat
-    if (pattern.hihat[step] && Math.random() < this.currentDrumProb.hihat) {
-      const vel = 0.3 + Math.random() * 0.2;
-      this.hihat.triggerAttackRelease('32n', time, vel);
+    if (this.cachedPattern.hihat[step] && Math.random() < this.currentDrumProb.hihat) {
+      this.hihat.triggerAttackRelease('32n', time, 0.3 + Math.random() * 0.2);
     }
 
-    // Chord stab — timing jitter drags behind the beat (lofi feel)
-    if (pattern.chordSteps.includes(step)) {
+    if (this.cachedChordStepSet.has(step)) {
       const jitter = Math.random() * this.currentChordTiming * 0.12;
       this.chordSynth.triggerAttackRelease(shiftedNotes, this.currentChordLength, time + jitter, 0.5 + Math.random() * 0.1);
     }
 
-    // Bass
-    const bassHit = pattern.bassSteps.find(b => b.step === step);
-    if (bassHit) {
-      const note = bassHit.interval === 0
-        ? prog.bassRoots[this.chordIndex]
-        : prog.bassFifths[this.chordIndex];
-      this.bassSynth.triggerAttackRelease(note, '8n', time, 0.7);
+    if (this.currentBassStyle === 'walking') {
+      const walkPos = WALKING_STEPS.indexOf(step);
+      if (walkPos >= 0) {
+        let bassNote: string;
+        if (walkPos === 0) bassNote = this.cachedBassRoots[this.chordIndex];
+        else if (walkPos === 1) bassNote = this.cachedBassThirds[this.chordIndex];
+        else if (walkPos === 2) bassNote = this.cachedBassFifths[this.chordIndex];
+        else bassNote = this.cachedBassApproach[(this.chordIndex + 1) % this.cachedProg.chords.length];
+        this.bassSynth.triggerAttackRelease(bassNote, '4n', time, 0.75);
+      }
+    } else {
+      const interval = this.cachedBassStepToInterval.get(step);
+      if (interval !== undefined) {
+        const raw = interval === 0 ? this.cachedBassRoots[this.chordIndex] : this.cachedBassFifths[this.chordIndex];
+        this.bassSynth.triggerAttackRelease(raw, '8n', time, 0.7);
+      }
     }
 
-    // Melody — apply octave shift at read-time for immediate response
-    const melHit = this.melodyPattern[step];
+    const melHit = this.melodyPatternBuf[step];
     if (melHit !== null) {
-      const melSemitones = this.currentMelodyOctave * 12;
-      const melNote = melSemitones === 0
-        ? melHit.note
-        : Tone.Frequency(melHit.note).transpose(melSemitones).toNote();
       const jitter = Math.random() * this.currentChordTiming * 0.08;
-      this.melodySynth.triggerAttackRelease(melNote, melHit.dur, time + jitter, 0.3 + Math.random() * 0.1);
+      this.melodySynth.triggerAttackRelease(melHit.note, melHit.dur, time + jitter, 0.3 + Math.random() * 0.1);
       this.prevMelodyNote = melHit.note;
     }
   }
 
   updateParams(params: Partial<EngineParams>): void {
+    let needsRebuild = false;
+
     if (params.bpm !== undefined) {
       Tone.getTransport().bpm.rampTo(params.bpm, 0.1);
     }
     if (params.mood !== undefined) {
       this.currentMood = params.mood;
+      needsRebuild = true;
     }
     if (params.progressionId !== undefined) {
       this.currentProgressionId = params.progressionId;
       this.chordIndex = 0;
       this.prevMelodyNote = null;
+      needsRebuild = true;
     }
     if (params.octaveShift !== undefined) {
       this.currentOctaveShift = params.octaveShift;
+      needsRebuild = true;
     }
     if (params.melodyOctave !== undefined) {
       this.currentMelodyOctave = params.melodyOctave;
+      needsRebuild = true;
+    }
+    if (params.keyShift !== undefined) {
+      this.currentKeyShift = params.keyShift;
+      needsRebuild = true;
     }
     if (params.chordLength !== undefined) {
       this.currentChordLength = params.chordLength;
@@ -302,6 +358,14 @@ export class LofiEngine {
       this._mix = params.mix;
       this.applyMix(params.mix);
     }
+    if (params.bassStyle !== undefined) {
+      this.currentBassStyle = params.bassStyle;
+    }
+
+    if (needsRebuild) {
+      this.rebuildCache();
+      this.generateMelodyPattern();
+    }
   }
 
   getStep(): number {
@@ -315,6 +379,7 @@ export class LofiEngine {
   dispose(): void {
     this.stop();
     this.chordSynth.dispose();
+    this.chordTremolo.dispose();
     this.bassSynth.dispose();
     this.melodySynth.dispose();
     this.kick.dispose();
@@ -322,7 +387,6 @@ export class LofiEngine {
     this.hihat.dispose();
     this.vinyl.dispose();
     (['chord', 'bass', 'kick', 'snare', 'hihat', 'melody', 'vinyl'] as const).forEach(k => this.gates[k].dispose());
-    this.chorus.dispose();
     this.reverb.dispose();
     this.lowpass.dispose();
     this.highpass.dispose();

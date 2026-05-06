@@ -6,12 +6,13 @@ interface ControlsProps {
 }
 
 const MOODS: Mood[] = ['chill', 'sad', 'jazzy'];
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 function fmtHz(hz: number): string {
   return hz >= 1000 ? `${(hz / 1000).toFixed(1)}k` : `${Math.round(hz)}`;
 }
 
-export function Controls({ params, onChange }: ControlsProps) {
+export function LeftControls({ params, onChange }: ControlsProps) {
   return (
     <div className="controls">
       <div className="mood-row">
@@ -36,6 +37,25 @@ export function Controls({ params, onChange }: ControlsProps) {
         <span className="val">{params.bpm}</span>
       </label>
 
+      <span className="section-label">Key</span>
+      <div className="key-row">
+        {NOTE_NAMES.map((note, i) => (
+          <button
+            key={note}
+            className={`key-btn ${params.keyShift === i ? 'active' : ''}`}
+            onClick={() => onChange({ keyShift: i })}
+          >
+            {note}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function RightControls({ params, onChange }: ControlsProps) {
+  return (
+    <div className="controls">
       <label className="slider-row">
         <span>Reverb</span>
         <input
@@ -134,6 +154,22 @@ export function Controls({ params, onChange }: ControlsProps) {
           >+</button>
         </div>
         <span className="val" />
+      </div>
+
+      <span className="section-label">Bass</span>
+      <div className="mood-row">
+        <button
+          className={`mood-btn ${params.bassStyle === 'simple' ? 'active' : ''}`}
+          onClick={() => onChange({ bassStyle: 'simple' })}
+        >
+          simple
+        </button>
+        <button
+          className={`mood-btn ${params.bassStyle === 'walking' ? 'active' : ''}`}
+          onClick={() => onChange({ bassStyle: 'walking' })}
+        >
+          walking
+        </button>
       </div>
 
       <span className="section-label">Drums</span>

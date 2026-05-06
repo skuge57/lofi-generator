@@ -1,13 +1,14 @@
-import { PROGRESSIONS } from '../engine/musicTheory';
+import { PROGRESSIONS, transposeChordName } from '../engine/musicTheory';
 
 interface ProgressionPickerProps {
   progressionId: string;
   activeChordIndex: number;
   playing: boolean;
+  keyShift: number;
   onChange: (id: string) => void;
 }
 
-export function ProgressionPicker({ progressionId, activeChordIndex, playing, onChange }: ProgressionPickerProps) {
+export function ProgressionPicker({ progressionId, activeChordIndex, playing, keyShift, onChange }: ProgressionPickerProps) {
   const current = PROGRESSIONS.find(p => p.id === progressionId) ?? PROGRESSIONS[0];
 
   return (
@@ -18,7 +19,7 @@ export function ProgressionPicker({ progressionId, activeChordIndex, playing, on
             key={i}
             className={`chord-name ${playing && i === activeChordIndex ? 'active' : ''}`}
           >
-            {chord.name}
+            {transposeChordName(chord.name, keyShift)}
           </span>
         ))}
       </div>
