@@ -1,4 +1,4 @@
-import type { Mood, ProgressionDef, RhythmPattern, SongSection } from './types';
+import type { Mood, ProgressionDef, RhythmPattern, SongSection, TimeSignature } from './types';
 
 export const PROGRESSIONS: ProgressionDef[] = [
   {
@@ -115,27 +115,68 @@ export const PROGRESSIONS: ProgressionDef[] = [
   },
 ];
 
-const PATTERNS: Record<Mood, RhythmPattern> = {
-  chill: {
-    kick:  [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false],
-    snare: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
-    hihat: [false,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
-    chordSteps: [0, 8],
-    bassSteps: [{ step: 0, interval: 0 }, { step: 8, interval: 1 }],
+function hits(stepsPerBar: number, steps: number[]): boolean[] {
+  const out = new Array<boolean>(stepsPerBar).fill(false);
+  steps.forEach(step => { out[step] = true; });
+  return out;
+}
+
+function pattern(
+  stepsPerBar: number,
+  fillStartStep: number,
+  kick: number[],
+  snare: number[],
+  hihat: number[],
+  chordSteps: number[],
+  bassSteps: { step: number; interval: number }[],
+  walkingSteps: number[],
+  lazySteps: number[]
+): RhythmPattern {
+  return {
+    stepsPerBar,
+    fillStartStep,
+    kick: hits(stepsPerBar, kick),
+    snare: hits(stepsPerBar, snare),
+    hihat: hits(stepsPerBar, hihat),
+    chordSteps,
+    bassSteps,
+    walkingSteps,
+    lazySteps,
+  };
+}
+
+const PATTERNS: Record<TimeSignature, Record<Mood, RhythmPattern>> = {
+  '4/4': {
+    chill: pattern(16, 12, [0, 8], [4, 12], [2, 4, 6, 8, 10, 12, 14], [0, 8],
+      [{ step: 0, interval: 0 }, { step: 8, interval: 1 }], [0, 4, 8, 12], [0, 10]),
+    sad: pattern(16, 12, [0, 4, 8], [4, 12], [2, 6, 8, 10, 14], [0, 8],
+      [{ step: 0, interval: 0 }, { step: 4, interval: 0 }, { step: 8, interval: 1 }], [0, 4, 8, 12], [0, 10]),
+    jazzy: pattern(16, 12, [0, 8], [4, 11, 12], [2, 4, 6, 10, 12, 14], [0, 6, 8],
+      [{ step: 0, interval: 0 }, { step: 6, interval: 0 }, { step: 8, interval: 1 }, { step: 12, interval: 0 }], [0, 4, 8, 12], [0, 10]),
   },
-  sad: {
-    kick:  [true,false,false,false, true,false,false,false, true,false,false,false, false,false,false,false],
-    snare: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
-    hihat: [false,false,true,false, false,false,true,false, true,false,true,false, false,false,true,false],
-    chordSteps: [0, 8],
-    bassSteps: [{ step: 0, interval: 0 }, { step: 4, interval: 0 }, { step: 8, interval: 1 }],
+  '3/4': {
+    chill: pattern(12, 8, [0, 8], [4], [2, 4, 6, 8, 10], [0, 6],
+      [{ step: 0, interval: 0 }, { step: 6, interval: 1 }], [0, 4, 8], [0, 7]),
+    sad: pattern(12, 8, [0, 4, 8], [4], [2, 6, 10], [0, 6],
+      [{ step: 0, interval: 0 }, { step: 4, interval: 0 }, { step: 8, interval: 1 }], [0, 4, 8], [0, 6]),
+    jazzy: pattern(12, 8, [0, 8], [4, 9], [2, 4, 6, 10], [0, 5, 8],
+      [{ step: 0, interval: 0 }, { step: 5, interval: 0 }, { step: 8, interval: 1 }], [0, 4, 8], [0, 7]),
   },
-  jazzy: {
-    kick:  [true,false,false,false, false,false,false,false, true,false,false,false, false,false,false,false],
-    snare: [false,false,false,false, true,false,false,false, false,false,false,true, true,false,false,false],
-    hihat: [false,false,true,false, true,false,true,false, false,false,true,false, true,false,true,false],
-    chordSteps: [0, 6, 8],
-    bassSteps: [{ step: 0, interval: 0 }, { step: 6, interval: 0 }, { step: 8, interval: 1 }, { step: 12, interval: 0 }],
+  '5/4': {
+    chill: pattern(20, 16, [0, 8, 16], [4, 12], [2, 4, 6, 8, 10, 12, 14, 16, 18], [0, 8, 16],
+      [{ step: 0, interval: 0 }, { step: 8, interval: 1 }, { step: 16, interval: 0 }], [0, 4, 8, 12, 16], [0, 14]),
+    sad: pattern(20, 16, [0, 4, 10, 16], [4, 12], [2, 6, 10, 14, 18], [0, 10],
+      [{ step: 0, interval: 0 }, { step: 4, interval: 0 }, { step: 10, interval: 1 }, { step: 16, interval: 0 }], [0, 4, 8, 12, 16], [0, 12]),
+    jazzy: pattern(20, 16, [0, 8, 14], [4, 11, 12, 18], [2, 4, 6, 10, 12, 14, 18], [0, 6, 10, 16],
+      [{ step: 0, interval: 0 }, { step: 6, interval: 0 }, { step: 10, interval: 1 }, { step: 16, interval: 0 }], [0, 4, 8, 12, 16], [0, 14]),
+  },
+  '6/8': {
+    chill: pattern(12, 8, [0, 6], [6], [2, 4, 6, 8, 10], [0, 6],
+      [{ step: 0, interval: 0 }, { step: 6, interval: 1 }], [0, 3, 6, 9], [0, 8]),
+    sad: pattern(12, 8, [0, 3, 6], [6], [2, 4, 8, 10], [0, 6],
+      [{ step: 0, interval: 0 }, { step: 3, interval: 0 }, { step: 6, interval: 1 }], [0, 3, 6, 9], [0, 8]),
+    jazzy: pattern(12, 8, [0, 6, 9], [3, 6], [2, 4, 6, 8, 10], [0, 4, 6],
+      [{ step: 0, interval: 0 }, { step: 4, interval: 0 }, { step: 6, interval: 1 }, { step: 9, interval: 0 }], [0, 3, 6, 9], [0, 8]),
   },
 };
 
@@ -160,8 +201,8 @@ export function getProgressionById(id: string): ProgressionDef {
   return PROGRESSIONS.find(p => p.id === id) ?? PROGRESSIONS[0];
 }
 
-export function getPattern(mood: Mood): RhythmPattern {
-  return PATTERNS[mood];
+export function getPattern(mood: Mood, timeSignature: TimeSignature = '4/4'): RhythmPattern {
+  return PATTERNS[timeSignature][mood];
 }
 
 // Song arrangement: a fixed A/B/bridge form that loops. Each section can mute

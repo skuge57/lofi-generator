@@ -6,13 +6,14 @@ interface InstrumentTogglesProps {
 }
 
 const INSTRUMENTS: { key: keyof InstrumentMix; label: string }[] = [
-  { key: 'kick',   label: 'Kick'   },
-  { key: 'snare',  label: 'Snare'  },
-  { key: 'hihat',  label: 'HH'     },
-  { key: 'bass',   label: 'Bass'   },
-  { key: 'chord',  label: 'Chord'  },
-  { key: 'melody', label: 'Mel'    },
-  { key: 'vinyl',  label: 'Vinyl'  },
+  { key: 'kick',    label: 'Kick'    },
+  { key: 'snare',   label: 'Snare'   },
+  { key: 'hihat',   label: 'HH'      },
+  { key: 'bass',    label: 'Bass'    },
+  { key: 'chord',   label: 'Chord'   },
+  { key: 'melody',  label: 'Mel'     },
+  { key: 'counter', label: 'Counter' },
+  { key: 'vinyl',   label: 'Vinyl'   },
 ];
 
 export function InstrumentToggles({ mix, onChange }: InstrumentTogglesProps) {

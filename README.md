@@ -8,11 +8,13 @@ Built with React 19, TypeScript, and Vite.
 
 - **8 chord progressions** — warm jazz voicings (maj7, m7, m9, 13) covering moods from "Sunday Morning" to "Late Night"
 - **3 rhythmic moods** — `chill`, `sad`, `jazzy`, each with its own kick/snare/hihat pattern and chord placement
-- **3 bass styles** — `simple` (root + fifth), `walking` (root → 3rd → 5th → approach), `lazy` (sustained root + syncopated fifth)
-- **Procedural melody** — directional phrases (1–2 per bar) that move stepwise through the scale, with phrase-ending resolution notes and continuity across bars
+- **4 time signatures** — switch between `4/4`, `3/4`, `5/4`, and `6/8` with dedicated drum, chord, bass, and fill patterns
+- **6 bass styles** — `simple` (root + fifth), `walking` (root → 3rd → 5th → approach), `lazy` (sustained root + syncopated fifth), plus `bounce`, `dub`, and `pedal` lines
+- **Procedural melody** — short motifs that repeat for a few bars then mutate (inversion, contour jitter), with phrase endings snapped onto chord tones for tension/release
+- **Counter-melody** — a soft second voice a third or sixth below the lead, hugging chord tones for harmony
 - **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, drums dropped) → A (8). Sections that drop drums end on a snare-roll fill that telegraphs the next section.
 - **Per-instrument toggles** — mute chords, bass, kick, snare, hi-hat, melody, or vinyl crackle independently
-- **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, drum hit probability, reverb, vinyl noise, low/high-pass filters
+- **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, drum hit probability, reverb, vinyl noise, tape wobble, low/high-pass filters
 - **Visual feedback** — current chord highlighted while the progression plays
 - **Zero allocations in the audio tick** — all note data is pre-cached and rebuilt only when params change, so the 16th-note scheduler stays GC-free
 
@@ -44,7 +46,7 @@ npm run lint      # eslint
 The audio engine (`src/engine/lofiEngine.ts`) drives a `Tone.Sequence` at 16th notes. On every tick it consults pre-built caches for the current chord, bass note, drum pattern, and melody buffer. When you change a parameter, the relevant cache is rebuilt off the audio thread.
 
 - Chord progressions and rhythm patterns live in `src/engine/musicTheory.ts`
-- The signal chain is: instruments → per-instrument gates → highpass → lowpass → reverb → limiter → output
+- The signal chain is: instruments → per-instrument gates → highpass → lowpass → tape wow/flutter → reverb → limiter → output
 - The chord pad uses an FM synth into a tremolo for that wobbly Rhodes feel; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, MetalSynth hat); vinyl crackle is filtered pink noise
 
 ## Future plans
@@ -53,7 +55,7 @@ Rough roadmap, no promises:
 
 ### Sound design
 - [ ] **Sample-based drums** — optional one-shot samples (kick, snare, hat) alongside the synthesized kit, for more authentic lo-fi grit
-- [ ] **Tape wow & flutter** — slow pitch modulation on the master bus to emulate worn cassette
+- [x] **Tape wow & flutter** — slow pitch modulation on the master bus to emulate worn cassette
 - [ ] **Sidechain ducking** — gentle pump on chords/bass triggered by the kick
 - [ ] **Bitcrusher / sample-rate reduction** — optional lo-fi destruction on the master
 - [ ] **More instrument voices** — Wurlitzer, muted guitar, vibraphone alternatives for the chord pad
@@ -61,10 +63,10 @@ Rough roadmap, no promises:
 ### Composition
 - [ ] **User-defined progressions** — let users build chord sequences from a roman-numeral picker
 - [x] **Song sections** — A / B / bridge structure with automatic arrangement (drops drums for 4 bars, brings them back with a snare-roll fill)
-- [ ] **Smarter melody** — motif development (repeat-and-vary) instead of fresh phrases each bar; tension/release shaping toward chord tones
-- [ ] **Counter-melody / second voice** — soft harmony line a third or sixth below the lead
+- [x] **Smarter melody** — motif development (repeat-and-vary) instead of fresh phrases each bar; tension/release shaping toward chord tones
+- [x] **Counter-melody / second voice** — soft harmony line a third or sixth below the lead
 - [ ] **Swing / shuffle amount** — variable 16th-note swing slider
-- [ ] **Time signatures beyond 4/4** — 6/8, 3/4, 5/4 patterns
+- [x] **Time signatures beyond 4/4** — 6/8, 3/4, 5/4 patterns
 
 ### UX
 - [ ] **Preset save/load** — store full parameter sets in localStorage, share via URL

@@ -8,7 +8,7 @@ import type { EngineParams, InstrumentMix, SectionInfo } from './engine/types';
 import './App.css';
 
 const DEFAULT_MIX: InstrumentMix = {
-  chord: true, bass: true, kick: true, snare: true, hihat: true, vinyl: true, melody: true,
+  chord: true, bass: true, kick: true, snare: true, hihat: true, vinyl: true, melody: true, counter: true,
 };
 
 const DEFAULT_PARAMS: EngineParams = {
@@ -17,6 +17,7 @@ const DEFAULT_PARAMS: EngineParams = {
   progressionId: 'warm-evening',
   reverb: 0.5,
   vinyl: 0.3,
+  tape: 0.35,
   lowCut: 60,
   highCut: 8000,
   mix: DEFAULT_MIX,
@@ -28,6 +29,7 @@ const DEFAULT_PARAMS: EngineParams = {
   keyShift: 0,
   bassStyle: 'simple',
   songForm: false,
+  timeSignature: '4/4',
 };
 
 export default function App() {
@@ -40,7 +42,7 @@ export default function App() {
   const prevChordRef = useRef(-1);
   const prevSectionKeyRef = useRef('');
 
-  const trackStep = useCallback(() => {
+  function trackStep() {
     if (engineRef.current) {
       const c = engineRef.current.getChordIndex();
       if (c !== prevChordRef.current) { prevChordRef.current = c; setChordIndex(c); }
@@ -52,7 +54,7 @@ export default function App() {
       }
     }
     rafRef.current = requestAnimationFrame(trackStep);
-  }, []);
+  }
 
   const handleToggle = async () => {
     if (playing) {
@@ -98,6 +100,9 @@ export default function App() {
       <div className="app-columns">
         <div className="left-panel">
           <LeftControls params={params} onChange={handleParamChange} />
+        </div>
+
+        <div className="middle-panel">
           <ProgressionPicker
             progressionId={params.progressionId}
             activeChordIndex={chordIndex}
@@ -106,13 +111,13 @@ export default function App() {
             sectionInfo={sectionInfo}
             onChange={id => handleParamChange({ progressionId: id })}
           />
-        </div>
-
-        <div className="right-panel">
           <InstrumentToggles
             mix={params.mix}
             onChange={mix => handleParamChange({ mix })}
           />
+        </div>
+
+        <div className="right-panel">
           <RightControls params={params} onChange={handleParamChange} />
         </div>
       </div>

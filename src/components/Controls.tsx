@@ -1,4 +1,5 @@
-import type { Mood, EngineParams } from '../engine/types';
+import type { BassStyle, Mood, EngineParams, TimeSignature } from '../engine/types';
+import { InfoTip } from './InfoTip';
 
 interface ControlsProps {
   params: EngineParams;
@@ -6,6 +7,8 @@ interface ControlsProps {
 }
 
 const MOODS: Mood[] = ['chill', 'sad', 'jazzy'];
+const TIME_SIGNATURES: TimeSignature[] = ['4/4', '3/4', '5/4', '6/8'];
+const BASS_STYLES: BassStyle[] = ['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal'];
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 function fmtHz(hz: number): string {
@@ -37,7 +40,10 @@ export function LeftControls({ params, onChange }: ControlsProps) {
         <span className="val">{params.bpm}</span>
       </label>
 
-      <span className="section-label">Key</span>
+      <span className="section-label section-label-row">
+        <span>Key</span>
+        <InfoTip text="Transposes chords and melody together—the same progression in a different key." />
+      </span>
       <div className="key-row">
         {NOTE_NAMES.map((note, i) => (
           <button
@@ -50,14 +56,31 @@ export function LeftControls({ params, onChange }: ControlsProps) {
         ))}
       </div>
 
-      <span className="section-label">Arrangement</span>
-      <button
-        className={`song-form-btn ${params.songForm ? 'active' : ''}`}
-        onClick={() => onChange({ songForm: !params.songForm })}
-        title="Auto-arrange into A/B/bridge sections with drum drops and fills"
-      >
-        Song form: {params.songForm ? 'on' : 'off'}
-      </button>
+      <span className="section-label section-label-row">
+        <span>Arrangement</span>
+        <InfoTip text="Beats per bar and how strong the downbeat feels. Odd meters like 5/4 or 6/8 add sway compared to straight 4/4." />
+      </span>
+      <div className="mood-row">
+        {TIME_SIGNATURES.map(sig => (
+          <button
+            key={sig}
+            className={`mood-btn ${params.timeSignature === sig ? 'active' : ''}`}
+            onClick={() => onChange({ timeSignature: sig })}
+          >
+            {sig}
+          </button>
+        ))}
+      </div>
+
+      <div className="song-form-row">
+        <button
+          className={`song-form-btn ${params.songForm ? 'active' : ''}`}
+          onClick={() => onChange({ songForm: !params.songForm })}
+        >
+          Song form: {params.songForm ? 'on' : 'off'}
+        </button>
+        <InfoTip text="Auto-arranges into sections (like verse/chorus), thins or fills drums per section, and adds short fills before transitions." />
+      </div>
     </div>
   );
 }
@@ -65,8 +88,11 @@ export function LeftControls({ params, onChange }: ControlsProps) {
 export function RightControls({ params, onChange }: ControlsProps) {
   return (
     <div className="controls">
+      <span className="section-label">Tone</span>
       <label className="slider-row">
-        <span>Reverb</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Reverb</span>
+        </span>
         <input
           type="range" min={0} max={1} step={0.01}
           value={params.reverb}
@@ -76,7 +102,10 @@ export function RightControls({ params, onChange }: ControlsProps) {
       </label>
 
       <label className="slider-row">
-        <span>Vinyl</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Vinyl</span>
+          <InfoTip text="Layer of filtered noise for crackle and dust—classic lo-fi texture on top of the mix." />
+        </span>
         <input
           type="range" min={0} max={1} step={0.01}
           value={params.vinyl}
@@ -86,7 +115,23 @@ export function RightControls({ params, onChange }: ControlsProps) {
       </label>
 
       <label className="slider-row">
-        <span>Low cut</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Tape</span>
+          <InfoTip text="Tape-style wow and flutter: slow pitch wobble and shimmer, like an old cassette deck." />
+        </span>
+        <input
+          type="range" min={0} max={1} step={0.01}
+          value={params.tape}
+          onChange={e => onChange({ tape: Number(e.target.value) })}
+        />
+        <span className="val">{params.tape.toFixed(2)}</span>
+      </label>
+
+      <label className="slider-row">
+        <span className="slider-label">
+          <span className="slider-label-text">Low cut</span>
+          <InfoTip text="High-pass filter frequency. Higher values remove more low rumble and mud, leaving a lighter mix." />
+        </span>
         <input
           type="range" min={20} max={500} step={1}
           value={params.lowCut}
@@ -96,7 +141,10 @@ export function RightControls({ params, onChange }: ControlsProps) {
       </label>
 
       <label className="slider-row">
-        <span>High cut</span>
+        <span className="slider-label">
+          <span className="slider-label-text">High cut</span>
+          <InfoTip text="Low-pass filter frequency. Lower values darken the mix by rolling off treble and air." />
+        </span>
         <input
           type="range" min={500} max={18000} step={50}
           value={params.highCut}
@@ -105,8 +153,12 @@ export function RightControls({ params, onChange }: ControlsProps) {
         <span className="val">{fmtHz(params.highCut)}</span>
       </label>
 
+      <span className="section-label">Feel</span>
       <label className="slider-row">
-        <span>Timing</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Timing</span>
+          <InfoTip text="Humanizes note onsets: random tiny delays on chords and melody. Higher values sound looser and more laid-back." />
+        </span>
         <input
           type="range" min={0} max={1} step={0.01}
           value={params.chordTiming}
@@ -116,7 +168,10 @@ export function RightControls({ params, onChange }: ControlsProps) {
       </label>
 
       <label className="slider-row">
-        <span>Chord</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Chord</span>
+          <InfoTip text="How long each chord pad rings out (note duration in seconds). Shorter feels stabby; longer feels washed out." />
+        </span>
         <input
           type="range" min={0.05} max={4} step={0.05}
           value={params.chordLength}
@@ -126,13 +181,16 @@ export function RightControls({ params, onChange }: ControlsProps) {
       </label>
 
       <div className="slider-row">
-        <span>Octave</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Octave</span>
+          <InfoTip text="Shifts the chord pad voicings up or down in octaves. Bass and lead melody keep their own register unless you change Mel oct." />
+        </span>
         <div className="octave-btns">
           <button
             className="oct-btn"
             disabled={params.octaveShift <= -2}
             onClick={() => onChange({ octaveShift: params.octaveShift - 1 })}
-          >−</button>
+          >-</button>
           <span className="oct-val">
             {params.octaveShift > 0 ? `+${params.octaveShift}` : params.octaveShift}
           </span>
@@ -146,13 +204,16 @@ export function RightControls({ params, onChange }: ControlsProps) {
       </div>
 
       <div className="slider-row">
-        <span>Mel oct</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Mel oct</span>
+          <InfoTip text="Moves only the lead melody (and its harmony line) up or down an octave, independent of the rest of the arrangement." />
+        </span>
         <div className="octave-btns">
           <button
             className="oct-btn"
             disabled={params.melodyOctave <= -1}
             onClick={() => onChange({ melodyOctave: params.melodyOctave - 1 })}
-          >−</button>
+          >-</button>
           <span className="oct-val">
             {params.melodyOctave > 0 ? `+${params.melodyOctave}` : params.melodyOctave}
           </span>
@@ -165,32 +226,33 @@ export function RightControls({ params, onChange }: ControlsProps) {
         <span className="val" />
       </div>
 
-      <span className="section-label">Bass</span>
-      <div className="mood-row">
-        <button
-          className={`mood-btn ${params.bassStyle === 'simple' ? 'active' : ''}`}
-          onClick={() => onChange({ bassStyle: 'simple' })}
-        >
-          simple
-        </button>
-        <button
-          className={`mood-btn ${params.bassStyle === 'walking' ? 'active' : ''}`}
-          onClick={() => onChange({ bassStyle: 'walking' })}
-        >
-          walking
-        </button>
-        <button
-          className={`mood-btn ${params.bassStyle === 'lazy' ? 'active' : ''}`}
-          onClick={() => onChange({ bassStyle: 'lazy' })}
-        >
-          lazy
-        </button>
+      <span className="section-label section-label-row">
+        <span>Bass</span>
+        <InfoTip text="Bass line vocabulary: Simple is roots/fifths; Walking outlines changes; Lazy uses long notes; Bounce is syncopated; Dub leaves space; Pedal hammers the root with accents." />
+      </span>
+      <div className="bass-style-grid" role="group" aria-label="Bass style">
+        {BASS_STYLES.map(style => (
+          <button
+            key={style}
+            type="button"
+            className={`mood-btn bass-style-btn ${params.bassStyle === style ? 'active' : ''}`}
+            onClick={() => onChange({ bassStyle: style })}
+          >
+            {style}
+          </button>
+        ))}
       </div>
 
-      <span className="section-label">Drums</span>
+      <span className="section-label section-label-row">
+        <span>Drums</span>
+        <InfoTip text="Each slider is the chance that drum hits actually fire when the pattern asks for them. Lower values thin out the beat randomly." />
+      </span>
 
       <label className="slider-row">
-        <span>Kick %</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Kick %</span>
+          <InfoTip text="Probability the kick plays on patterned kick steps. Turn down for lighter or broken grooves." />
+        </span>
         <input
           type="range" min={0} max={1} step={0.05}
           value={params.drumProb.kick}
@@ -200,7 +262,10 @@ export function RightControls({ params, onChange }: ControlsProps) {
       </label>
 
       <label className="slider-row">
-        <span>Snare %</span>
+        <span className="slider-label">
+          <span className="slider-label-text">Snare %</span>
+          <InfoTip text="Probability snare/backbeat hits fire. Lower values drop backbeats for a softer pocket." />
+        </span>
         <input
           type="range" min={0} max={1} step={0.05}
           value={params.drumProb.snare}
@@ -210,7 +275,10 @@ export function RightControls({ params, onChange }: ControlsProps) {
       </label>
 
       <label className="slider-row">
-        <span>HH %</span>
+        <span className="slider-label">
+          <span className="slider-label-text">HH %</span>
+          <InfoTip text="Probability hi-hat ticks fire. Lower values thin out hats for more air between hits." />
+        </span>
         <input
           type="range" min={0} max={1} step={0.05}
           value={params.drumProb.hihat}

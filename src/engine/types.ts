@@ -1,4 +1,6 @@
 export type Mood = 'chill' | 'sad' | 'jazzy';
+export type TimeSignature = '4/4' | '3/4' | '5/4' | '6/8';
+export type BassStyle = 'simple' | 'walking' | 'lazy' | 'bounce' | 'dub' | 'pedal';
 
 export interface InstrumentMix {
   chord: boolean;
@@ -8,6 +10,7 @@ export interface InstrumentMix {
   hihat: boolean;
   vinyl: boolean;
   melody: boolean;
+  counter: boolean;
 }
 
 export interface EngineParams {
@@ -16,6 +19,7 @@ export interface EngineParams {
   progressionId: string;
   reverb: number;
   vinyl: number;
+  tape: number;
   lowCut: number;
   highCut: number;
   mix: InstrumentMix;
@@ -25,8 +29,9 @@ export interface EngineParams {
   melodyOctave: number;
   drumProb: { kick: number; snare: number; hihat: number };
   keyShift: number;
-  bassStyle: 'simple' | 'walking' | 'lazy';
+  bassStyle: BassStyle;
   songForm: boolean;
+  timeSignature: TimeSignature;
 }
 
 export interface SongSection {
@@ -63,9 +68,13 @@ export interface ProgressionDef {
 }
 
 export interface RhythmPattern {
+  stepsPerBar: number;
+  fillStartStep: number;
   kick: boolean[];
   snare: boolean[];
   hihat: boolean[];
   chordSteps: number[];
   bassSteps: { step: number; interval: number }[];
+  walkingSteps: number[];
+  lazySteps: number[];
 }
