@@ -350,37 +350,3 @@ input[type='range']::-moz-range-thumb {
   color: #e0c090;
 }
 
-/* Visualizer */
-.visualizer {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  height: 40px;
-  width: 100%;
-}
-
-.bar {
-  flex: 1;
-  background: #3a3028;
-  border-radius: 2px 2px 0 0;
-  height: 36px;
-  transform: scaleY(0.22);
-  transform-origin: bottom;
-  transition: background 0.1s;
-  will-change: transform;
-}
-
-.bar.animate {
-  animation: pulse 0.6s ease-in-out infinite alternate;
-}
-
-.bar.active {
-  background: #c8a87a;
-  animation: none;
-  transform: scaleY(1);
-}
-
-@keyframes pulse {
-  from { transform: scaleY(0.17); background: #4a4038; }
-  to   { transform: scaleY(0.78); background: #8a7060; }
-}

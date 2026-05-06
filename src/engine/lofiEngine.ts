@@ -67,7 +67,7 @@ export class LofiEngine {
     // Chorus removed from master bus — it processed all instruments simultaneously.
     // The chord tremolo still provides movement on the pad specifically.
     this.limiter = new Tone.Limiter(-3).toDestination();
-    this.reverb = new Tone.Reverb({ decay: 0.7, wet: params.reverb }).connect(this.limiter);
+    this.reverb = new Tone.Reverb({ decay: 0.35, wet: params.reverb }).connect(this.limiter);
     this.lowpass = new Tone.Filter(params.highCut, 'lowpass').connect(this.reverb);
     this.highpass = new Tone.Filter(params.lowCut, 'highpass').connect(this.lowpass);
 
@@ -223,6 +223,7 @@ export class LofiEngine {
   }
 
   async start(): Promise<void> {
+    await this.reverb.ready;
     await Tone.start();
     this.vinyl.start();
     this.currentStep = 0;

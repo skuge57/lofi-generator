@@ -1,17 +1,15 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 
 const BAR_COUNT = 16;
-const BAR_STYLES = Array.from({ length: BAR_COUNT }, (_, i) => ({
-  animationDelay: `${(i * 0.07) % 0.6}s`,
-}));
+const BARS = Array.from({ length: BAR_COUNT });
 
 export interface VisualizerHandle {
   setStep: (step: number) => void;
   reset: () => void;
 }
 
-export const Visualizer = forwardRef<VisualizerHandle, { playing: boolean }>(
-  function Visualizer({ playing }, ref) {
+export const Visualizer = forwardRef<VisualizerHandle>(
+  function Visualizer(_props, ref) {
     const barsRef = useRef<(HTMLDivElement | null)[]>(new Array(BAR_COUNT).fill(null));
     const activeRef = useRef(-1);
 
@@ -32,12 +30,11 @@ export const Visualizer = forwardRef<VisualizerHandle, { playing: boolean }>(
 
     return (
       <div className="visualizer">
-        {BAR_STYLES.map((style, i) => (
+        {BARS.map((_, i) => (
           <div
             key={i}
             ref={el => { barsRef.current[i] = el; }}
-            className={`bar ${playing ? 'animate' : ''}`}
-            style={style}
+            className="bar"
           />
         ))}
       </div>

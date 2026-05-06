@@ -4,8 +4,6 @@ import { Player } from './components/Player';
 import { LeftControls, RightControls } from './components/Controls';
 import { InstrumentToggles } from './components/InstrumentToggles';
 import { ProgressionPicker } from './components/ProgressionPicker';
-import { Visualizer } from './components/Visualizer';
-import type { VisualizerHandle } from './components/Visualizer';
 import type { EngineParams, InstrumentMix } from './engine/types';
 import './App.css';
 
@@ -38,11 +36,9 @@ export default function App() {
   const engineRef = useRef<LofiEngine | null>(null);
   const rafRef = useRef<number>(0);
   const prevChordRef = useRef(-1);
-  const visualizerRef = useRef<VisualizerHandle>(null);
 
   const trackStep = useCallback(() => {
     if (engineRef.current) {
-      visualizerRef.current?.setStep(engineRef.current.getStep());
       const c = engineRef.current.getChordIndex();
       if (c !== prevChordRef.current) { prevChordRef.current = c; setChordIndex(c); }
     }
@@ -56,7 +52,6 @@ export default function App() {
       engineRef.current = null;
       cancelAnimationFrame(rafRef.current);
       prevChordRef.current = -1;
-      visualizerRef.current?.reset();
       setPlaying(false);
     } else {
       const engine = new LofiEngine(params);
@@ -99,7 +94,6 @@ export default function App() {
             keyShift={params.keyShift}
             onChange={id => handleParamChange({ progressionId: id })}
           />
-          <Visualizer ref={visualizerRef} playing={playing} />
         </div>
 
         <div className="right-panel">
