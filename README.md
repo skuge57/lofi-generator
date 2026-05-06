@@ -64,7 +64,7 @@ Rough roadmap, no promises:
 ### Sound design
 - [ ] **Sample-based drums** — optional one-shot samples (kick, snare, hat) alongside the synthesized kit, for more authentic lo-fi grit
 - [x] **Tape wow & flutter** — slow pitch modulation on the master bus to emulate worn cassette
-- [ ] **Sidechain ducking** — gentle pump on chords/bass triggered by the kick
+- [x] **Sidechain ducking** — gentle pump on chords/bass triggered by the kick
 - [x] **Bitcrusher / sample-rate reduction** — optional lo-fi destruction on the master
 - [x] **More instrument voices** — Wurlitzer, muted guitar, vibraphone, tape choir, Juno strings, organ, and glass pad alternatives for the chord pad
 - [x] **Better vinyl** — intermittent clicks, pops, and dropouts layered with noise, not just steady filtered crackle

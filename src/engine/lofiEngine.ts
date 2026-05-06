@@ -13,6 +13,10 @@ function cloneEngineParams(p: EngineParams): EngineParams {
 
 const DEFAULT_STEPS_PER_BAR = 16;
 const REVERB_SEND_GAIN = 1.15;
+const SIDECHAIN_CHORD_FLOOR = 0.56;
+const SIDECHAIN_BASS_FLOOR = 0.68;
+const SIDECHAIN_ATTACK_SECONDS = 0.012;
+const SIDECHAIN_RELEASE_SECONDS = 0.24;
 type ChordSynth = Tone.PolySynth<Tone.FMSynth | Tone.AMSynth | Tone.Synth>;
 
 function clamp(n: number, min: number, max: number): number {
@@ -61,6 +65,8 @@ export class LofiEngine {
   private tapeTremble: Tone.Tremolo;
   private bitCrusher: Tone.BitCrusher;
   private gates: Record<keyof EngineParams['mix'], Tone.Gain>;
+  private chordSidechain: Tone.Gain;
+  private bassSidechain: Tone.Gain;
 
   private sequence: Tone.Sequence<number> | null = null;
   private currentMood: Mood;
@@ -215,7 +221,10 @@ export class LofiEngine {
       vinyl:   new Tone.Gain(params.mix.vinyl ? params.vinyl * 0.03 : 0).connect(this.limiter),
     };
 
-    this.chordTremolo = new Tone.Tremolo(4, 0.3).connect(this.gates.chord).start();
+    this.chordSidechain = new Tone.Gain(1).connect(this.gates.chord);
+    this.bassSidechain = new Tone.Gain(1).connect(this.gates.bass);
+
+    this.chordTremolo = new Tone.Tremolo(4, 0.3).connect(this.chordSidechain).start();
     this.guitarFilter = new Tone.Filter({
       frequency: 2600,
       type: 'lowpass',
@@ -264,7 +273,7 @@ export class LofiEngine {
       filter: { frequency: 300, type: 'lowpass' },
       envelope: { attack: 0.04, decay: 0.2, sustain: 0.5, release: 0.8 },
       volume: -10,
-    }).connect(this.gates.bass);
+    }).connect(this.bassSidechain);
 
     // Melody — soft sine lead
     this.melodySynth = new Tone.Synth({
@@ -638,6 +647,22 @@ export class LofiEngine {
     this.gates.vinyl.gain.rampTo(mix.vinyl ? this._vinylLevel : 0, 0.05);
   }
 
+  private triggerSidechain(time: number, intensity = 1): void {
+    const amount = clamp(intensity, 0, 1);
+    const attackAt = time + SIDECHAIN_ATTACK_SECONDS;
+    const releaseAt = attackAt + SIDECHAIN_RELEASE_SECONDS;
+    const chordFloor = 1 - (1 - SIDECHAIN_CHORD_FLOOR) * amount;
+    const bassFloor = 1 - (1 - SIDECHAIN_BASS_FLOOR) * amount;
+
+    this.chordSidechain.gain.cancelAndHoldAtTime(time);
+    this.chordSidechain.gain.linearRampToValueAtTime(chordFloor, attackAt);
+    this.chordSidechain.gain.exponentialRampToValueAtTime(1, releaseAt);
+
+    this.bassSidechain.gain.cancelAndHoldAtTime(time);
+    this.bassSidechain.gain.linearRampToValueAtTime(bassFloor, attackAt);
+    this.bassSidechain.gain.exponentialRampToValueAtTime(1, releaseAt);
+  }
+
   private applyTape(amount: number, rampTime = 0.2): void {
     const tape = Math.max(0, Math.min(1, amount));
     this.tapeSaturation.distortion = tape * 0.28;
@@ -991,6 +1016,7 @@ export class LofiEngine {
 
     if (this.activeMix.kick && this.cachedPattern.kick[step] && this.rnd() < this.currentDrumProb.kick * this.activeKickScale) {
       this.kick.triggerAttackRelease('C1', '8n', time);
+      this.triggerSidechain(time);
     }
 
     if (this.activeMix.snare && this.cachedPattern.snare[step] && this.rnd() < this.currentDrumProb.snare * this.activeSnareScale) {
@@ -1005,7 +1031,10 @@ export class LofiEngine {
     if (this.activeMix.snare && this.isFillBar && step >= this.cachedPattern.fillStartStep) {
       const vel = 0.32 + (step - this.cachedPattern.fillStartStep) * 0.16;
       this.snare.triggerAttackRelease('16n', time, vel);
-      if (this.activeMix.kick && step === this.cachedPattern.fillStartStep) this.kick.triggerAttackRelease('C1', '16n', time, 0.6);
+      if (this.activeMix.kick && step === this.cachedPattern.fillStartStep) {
+        this.kick.triggerAttackRelease('C1', '16n', time, 0.6);
+        this.triggerSidechain(time, 0.75);
+      }
     }
 
     if (this.activeMix.chord && this.cachedChordStepSet.has(step)) {
@@ -1276,6 +1305,8 @@ export class LofiEngine {
     this.guitarSampler.dispose();
     this.guitarFilter.dispose();
     this.chordTremolo.dispose();
+    this.chordSidechain.dispose();
+    this.bassSidechain.dispose();
     this.bassSynth.dispose();
     this.melodySynth.dispose();
     this.counterSynth.dispose();
