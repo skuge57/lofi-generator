@@ -5,6 +5,7 @@ const RNG_FINGERPRINT_KEYS: (keyof EngineParams)[] = [
   'bassStyle',
   'chordLength',
   'chordTiming',
+  'chordVoice',
   'drumProb',
   'energy',
   'keyShift',
@@ -13,6 +14,7 @@ const RNG_FINGERPRINT_KEYS: (keyof EngineParams)[] = [
   'mood',
   'octaveShift',
   'progressionId',
+  'reharmFlavor',
   'songForm',
   'timeSignature',
 ];

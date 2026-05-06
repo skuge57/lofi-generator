@@ -22,7 +22,7 @@ body {
   background: #221e19;
   border: 1px solid #3a3028;
   border-radius: 16px;
-  width: min(960px, calc(100vw - 32px));
+  width: min(1080px, calc(100vw - 32px));
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
 
@@ -30,12 +30,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 18px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .app-columns {
   display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
-  gap: 28px;
+  grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.12fr) minmax(260px, 1fr);
+  gap: 32px;
   align-items: start;
 }
 
@@ -86,6 +93,31 @@ body {
   color: #e0c090;
 }
 
+.randomize-btn {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid #3a3028;
+  background: #1a1612;
+  color: #c8a87a;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.randomize-btn:hover {
+  border-color: #c8a87a;
+  background: #c8a87a18;
+  color: #e0c090;
+}
+
+.randomize-btn:active {
+  transform: translateY(1px);
+}
+
 /* Controls */
 .controls {
   display: flex;
@@ -108,7 +140,15 @@ body {
   width: 100%;
 }
 
-.bass-style-grid .bass-style-btn {
+.chord-voice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.bass-style-grid .bass-style-btn,
+.chord-voice-grid .chord-voice-btn {
   flex: none;
   width: 100%;
   padding: 7px 2px;
@@ -138,6 +178,40 @@ body {
 }
 
 .mood-btn.active {
+  border-color: #c8a87a;
+  background: #c8a87a18;
+  color: #e0c090;
+}
+
+.time-signature-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.time-signature-btn {
+  min-width: 0;
+  height: 34px;
+  padding: 0 6px;
+  border: 1px solid #3a3028;
+  background: transparent;
+  color: #8a7060;
+  font-family: inherit;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.time-signature-btn:hover {
+  border-color: #c8a87a;
+  color: #c8a87a;
+}
+
+.time-signature-btn.active {
   border-color: #c8a87a;
   background: #c8a87a18;
   color: #e0c090;
@@ -346,10 +420,42 @@ input[type='range']::-moz-range-thumb {
 .prog-chord-display {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 0 6px;
+  gap: 10px;
+  padding: 12px 0 8px;
   border-top: 1px solid #2e2820;
   border-bottom: 1px solid #2e2820;
+}
+
+.reharm-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.reharm-btn {
+  min-width: 0;
+  padding: 6px 4px;
+  border: 1px solid #3a3028;
+  background: transparent;
+  color: #7c695a;
+  font-family: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.reharm-btn:hover {
+  border-color: #c8a87a88;
+  color: #c8a87a;
+}
+
+.reharm-btn.active {
+  border-color: #c8a87a;
+  background: #c8a87a18;
+  color: #e0c090;
 }
 
 .section-indicator {
@@ -404,11 +510,11 @@ input[type='range']::-moz-range-thumb {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  min-width: 46px;
-  font-size: 0.85rem;
+  min-width: 58px;
+  font-size: 0.92rem;
   color: #6a5a4a;
   letter-spacing: 0.03em;
-  padding: 3px 6px;
+  padding: 4px 7px;
   border-radius: 4px;
   transition: color 0.15s, background 0.15s;
 }
@@ -424,7 +530,7 @@ input[type='range']::-moz-range-thumb {
 
 .chord-roman {
   color: #8a7060;
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   line-height: 1;
 }
 

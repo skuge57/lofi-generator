@@ -15,7 +15,7 @@ Built with React 19, TypeScript, and Vite.
 - **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, drums dropped) → A (8). Sections that drop drums end on a snare-roll fill that telegraphs the next section.
 - **Energy curve** — a single energy control shapes the song form by section, morphing drum density, hi-hat activity, melody activity, and filter brightness over the arrangement
 - **Per-instrument toggles** — mute chords, bass, kick, snare, hi-hat, melody, or vinyl crackle independently
-- **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, drum hit probability, reverb, vinyl noise, tape wobble, low/high-pass filters
+- **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, drum hit probability, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
 - **Visual feedback** — current chord highlighted while the progression plays
 - **Zero allocations in the audio tick** — all note data is pre-cached and rebuilt only when params change, so the 16th-note scheduler stays GC-free
 
@@ -47,7 +47,7 @@ npm run lint      # eslint
 The audio engine (`src/engine/lofiEngine.ts`) drives a `Tone.Sequence` at 16th notes. On every tick it consults pre-built caches for the current chord, bass note, drum pattern, and melody buffer. When you change a parameter, the relevant cache is rebuilt off the audio thread.
 
 - Chord progressions and rhythm patterns live in `src/engine/musicTheory.ts`
-- The signal chain is: instruments → per-instrument gates → highpass → lowpass → tape wow/flutter → reverb → limiter → output
+- The signal chain is: instruments → per-instrument gates → highpass → lowpass → tape wow/flutter → bitcrusher → limiter → master volume → output, with reverb fed in parallel as a send.
 - The chord pad uses an FM synth into a tremolo for that wobbly Rhodes feel; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, MetalSynth hat); vinyl texture layers filtered pink-noise dust with intermittent clicks, low pops, and brief dropouts
 
 ## Future plans
@@ -58,15 +58,15 @@ Rough roadmap, no promises:
 - [ ] **Sample-based drums** — optional one-shot samples (kick, snare, hat) alongside the synthesized kit, for more authentic lo-fi grit
 - [x] **Tape wow & flutter** — slow pitch modulation on the master bus to emulate worn cassette
 - [ ] **Sidechain ducking** — gentle pump on chords/bass triggered by the kick
-- [ ] **Bitcrusher / sample-rate reduction** — optional lo-fi destruction on the master
-- [ ] **More instrument voices** — Wurlitzer, muted guitar, vibraphone alternatives for the chord pad
+- [x] **Bitcrusher / sample-rate reduction** — optional lo-fi destruction on the master
+- [x] **More instrument voices** — Wurlitzer, muted guitar, vibraphone alternatives for the chord pad
 - [x] **Better vinyl** — intermittent clicks, pops, and dropouts layered with noise, not just steady filtered crackle
 
 ### Composition
 - [ ] **User-defined progressions** — let users build chord sequences from a roman-numeral picker
 - [x] **Song sections** — A / B / bridge structure with automatic arrangement (drops drums for 4 bars, brings them back with a snare-roll fill)
 - [x] **Energy curve** — evolve the track over the form instead of static playback: intro sparse; verse / A normal; B with more hats and melody; bridge filtered; return with fuller drums. Driven by a single **energy** value (0–100) that morphs density, filter, and pattern weights by section
-- [ ] **Chord reharmonization** — optional flavor per progression: *diatonic*, *jazzy*, *darker*, *dreamy*, *spicy* — e.g. swap plain V for V13, tritone substitutions, or passing diminished chords while keeping the same Roman skeleton
+- [x] **Chord reharmonization** — optional flavor per progression: *diatonic*, *jazzy*, *darker*, *dreamy*, *spicy* — e.g. swap plain V for V13, tritone substitutions, or passing diminished chords while keeping the same Roman skeleton
 - [ ] **Voice-leading mode** — choose close inversions so pad voices move stepwise between changes instead of big jumps; warmer, more “played” pads
 - [x] **Smarter melody** — motif development (repeat-and-vary) instead of fresh phrases each bar; tension/release shaping toward chord tones
 - [x] **Counter-melody / second voice** — soft harmony line a third or sixth below the lead

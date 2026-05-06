@@ -1,5 +1,5 @@
 import type { WheelEvent } from 'react';
-import type { BassStyle, Mood, EngineParams, TimeSignature } from '../engine/types';
+import type { BassStyle, ChordVoice, Mood, EngineParams, TimeSignature } from '../engine/types';
 import { InfoTip } from './InfoTip';
 
 interface ControlsProps {
@@ -10,13 +10,19 @@ interface ControlsProps {
 const MOODS: Mood[] = ['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy'];
 const TIME_SIGNATURES: TimeSignature[] = ['4/4', '3/4', '5/4', '6/8'];
 const BASS_STYLES: BassStyle[] = ['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal'];
+const CHORD_VOICES: { value: ChordVoice; label: string }[] = [
+  { value: 'rhodes', label: 'Rhodes' },
+  { value: 'wurlitzer', label: 'Wurli' },
+  { value: 'muted-guitar', label: 'Guitar' },
+  { value: 'vibraphone', label: 'Vibes' },
+];
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
 interface WheelRangeProps {
   min: number;
   max: number;
   step: number;
   value: number;
+  wheelStep?: number;
   onValueChange: (value: number) => void;
 }
 
@@ -30,12 +36,12 @@ function clampRangeValue(value: number, min: number, max: number, step: number):
   return Number(clamped.toFixed(decimalPlaces(step)));
 }
 
-function WheelRange({ min, max, step, value, onValueChange }: WheelRangeProps) {
+function WheelRange({ min, max, step, value, wheelStep = step, onValueChange }: WheelRangeProps) {
   const handleWheel = (event: WheelEvent<HTMLInputElement>) => {
     event.preventDefault();
     event.currentTarget.focus();
     const direction = event.deltaY < 0 ? 1 : -1;
-    const nextValue = clampRangeValue(value + direction * step, min, max, step);
+    const nextValue = clampRangeValue(value + direction * wheelStep, min, max, step);
     if (nextValue !== value) {
       onValueChange(nextValue);
     }
@@ -103,11 +109,12 @@ export function LeftControls({ params, onChange }: ControlsProps) {
         <span>Arrangement</span>
         <InfoTip text="Beats per bar and how strong the downbeat feels. Odd meters like 5/4 or 6/8 add sway compared to straight 4/4." />
       </span>
-      <div className="mood-row">
+      <div className="time-signature-row" role="group" aria-label="Time signature">
         {TIME_SIGNATURES.map(sig => (
           <button
             key={sig}
-            className={`mood-btn ${params.timeSignature === sig ? 'active' : ''}`}
+            type="button"
+            className={`time-signature-btn ${params.timeSignature === sig ? 'active' : ''}`}
             onClick={() => onChange({ timeSignature: sig })}
           >
             {sig}
@@ -133,6 +140,7 @@ export function LeftControls({ params, onChange }: ControlsProps) {
         <WheelRange
           min={0} max={100} step={1}
           value={params.energy}
+          wheelStep={5}
           onValueChange={energy => onChange({ energy })}
         />
         <span className="val">{params.energy}</span>
@@ -158,6 +166,37 @@ export function RightControls({ params, onChange }: ControlsProps) {
   return (
     <div className="controls">
       <span className="section-label">Tone</span>
+      <span className="section-label section-label-row">
+        <span>Pad voice</span>
+        <InfoTip text="Chooses the chord instrument: warm Rhodes, brighter Wurlitzer, short muted guitar, or bell-like vibraphone." />
+      </span>
+      <div className="chord-voice-grid" role="group" aria-label="Chord pad voice">
+        {CHORD_VOICES.map(voice => (
+          <button
+            key={voice.value}
+            type="button"
+            className={`mood-btn chord-voice-btn ${params.chordVoice === voice.value ? 'active' : ''}`}
+            onClick={() => onChange({ chordVoice: voice.value })}
+          >
+            {voice.label}
+          </button>
+        ))}
+      </div>
+
+      <label className="slider-row">
+        <span className="slider-label">
+          <span className="slider-label-text">Master</span>
+          <InfoTip text="Final output level after the limiter. Use it to trim down or lift the whole mix." />
+        </span>
+        <WheelRange
+          min={0} max={2} step={0.01}
+          value={params.masterVolume}
+          wheelStep={0.05}
+          onValueChange={masterVolume => onChange({ masterVolume })}
+        />
+        <span className="val">{Math.round(params.masterVolume * 100)}%</span>
+      </label>
+
       <label className="slider-row">
         <span className="slider-label">
           <span className="slider-label-text">Reverb</span>
@@ -198,12 +237,26 @@ export function RightControls({ params, onChange }: ControlsProps) {
 
       <label className="slider-row">
         <span className="slider-label">
+          <span className="slider-label-text">Crush</span>
+          <InfoTip text="Master bitcrusher for optional lo-fi destruction. Higher values lower bit depth and blend in more crunchy aliasing." />
+        </span>
+        <WheelRange
+          min={0} max={1} step={0.01}
+          value={params.crush}
+          onValueChange={crush => onChange({ crush })}
+        />
+        <span className="val">{params.crush.toFixed(2)}</span>
+      </label>
+
+      <label className="slider-row">
+        <span className="slider-label">
           <span className="slider-label-text">Low cut</span>
           <InfoTip text="High-pass filter frequency. Higher values remove more low rumble and mud, leaving a lighter mix." />
         </span>
         <WheelRange
           min={20} max={500} step={1}
           value={params.lowCut}
+          wheelStep={10}
           onValueChange={lowCut => onChange({ lowCut })}
         />
         <span className="val">{fmtHz(params.lowCut)}</span>
@@ -217,6 +270,7 @@ export function RightControls({ params, onChange }: ControlsProps) {
         <WheelRange
           min={500} max={18000} step={50}
           value={params.highCut}
+          wheelStep={250}
           onValueChange={highCut => onChange({ highCut })}
         />
         <span className="val">{fmtHz(params.highCut)}</span>
@@ -231,6 +285,7 @@ export function RightControls({ params, onChange }: ControlsProps) {
         <WheelRange
           min={0} max={1} step={0.01}
           value={params.chordTiming}
+          wheelStep={0.05}
           onValueChange={chordTiming => onChange({ chordTiming })}
         />
         <span className="val">{Math.round(params.chordTiming * 100)}%</span>
@@ -244,6 +299,7 @@ export function RightControls({ params, onChange }: ControlsProps) {
         <WheelRange
           min={0} max={1} step={0.01}
           value={params.swing}
+          wheelStep={0.05}
           onValueChange={swing => onChange({ swing })}
         />
         <span className="val">{Math.round(params.swing * 100)}%</span>

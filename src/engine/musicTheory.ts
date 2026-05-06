@@ -1,4 +1,4 @@
-import type { Mood, ProgressionDef, RhythmPattern, SongSection, TimeSignature } from './types';
+import type { ChordVoicing, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SongSection, TimeSignature } from './types';
 
 export const PROGRESSIONS: ProgressionDef[] = [
   {
@@ -227,6 +227,125 @@ const NOTE_SEMI: Record<string, number> = {
   'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11,
 };
 
+const REHARM_FORMULAS: Record<ReharmFlavor, Record<string, number[]>> = {
+  diatonic: {
+    maj: [4, 7, 11, 14],
+    min: [3, 7, 10, 14],
+    dom: [4, 10, 14, 17],
+    dim: [3, 6, 9, 12],
+  },
+  jazzy: {
+    maj: [4, 7, 11, 14],
+    min: [3, 7, 10, 14],
+    dom: [4, 10, 14, 21],
+    dim: [3, 6, 9, 14],
+  },
+  darker: {
+    maj: [4, 6, 11, 14],
+    min: [3, 6, 10, 14],
+    dom: [4, 10, 13, 18],
+    dim: [3, 6, 9, 12],
+  },
+  dreamy: {
+    maj: [4, 7, 11, 14],
+    min: [3, 7, 10, 17],
+    dom: [4, 10, 14, 21],
+    dim: [3, 6, 9, 14],
+  },
+  spicy: {
+    maj: [4, 10, 11, 14],
+    min: [3, 10, 13, 17],
+    dom: [4, 10, 13, 21],
+    dim: [3, 6, 9, 13],
+  },
+};
+
+function parseNoteName(note: string): { root: string; octave: number; midi: number } | null {
+  const match = note.match(/^([A-G][#b]?)(-?\d+)$/);
+  if (!match) return null;
+  const [, root, octaveRaw] = match;
+  const semi = NOTE_SEMI[root];
+  if (semi === undefined) return null;
+  const octave = Number(octaveRaw);
+  return { root, octave, midi: (octave + 1) * 12 + semi };
+}
+
+function parseChordName(chordName: string): { root: string; quality: string; kind: 'maj' | 'min' | 'dom' | 'dim' } | null {
+  const match = chordName.match(/^([A-G][#b]?)(.*)$/);
+  if (!match) return null;
+  const [, root, quality] = match;
+  let kind: 'maj' | 'min' | 'dom' | 'dim' = 'maj';
+  if (/dim|o/.test(quality)) kind = 'dim';
+  else if (/^m(?!aj)/.test(quality)) kind = 'min';
+  else if (/^(7|9|11|13|6|sus|add|alt)/.test(quality)) kind = 'dom';
+  return { root, quality, kind };
+}
+
+function noteFromMidi(midi: number): string {
+  const pc = ((midi % 12) + 12) % 12;
+  const octave = Math.floor(midi / 12) - 1;
+  return `${CHROMATIC[pc]}${octave}`;
+}
+
+function rootMidiNear(root: string, targetMidi: number): number {
+  const semi = NOTE_SEMI[root];
+  if (semi === undefined) return targetMidi;
+  let best = semi + 12 * Math.floor(targetMidi / 12);
+  while (best - targetMidi > 6) best -= 12;
+  while (targetMidi - best > 6) best += 12;
+  return best;
+}
+
+function qualityForFlavor(kind: 'maj' | 'min' | 'dom' | 'dim', flavor: ReharmFlavor, originalQuality: string): string {
+  if (flavor === 'diatonic') return originalQuality;
+  if (kind === 'dim') return flavor === 'spicy' ? 'dim7b9' : 'dim7';
+  if (flavor === 'jazzy') return kind === 'maj' ? 'maj9' : kind === 'min' ? 'm9' : '13';
+  if (flavor === 'darker') return kind === 'maj' ? 'maj7#11' : kind === 'min' ? 'm7b5' : '7b9';
+  if (flavor === 'dreamy') return kind === 'maj' ? 'maj9' : kind === 'min' ? 'm11' : '13sus';
+  return kind === 'maj' ? 'maj7#11' : kind === 'min' ? 'm7b9' : '13b9';
+}
+
+function rootForFlavor(root: string, kind: 'maj' | 'min' | 'dom' | 'dim', flavor: ReharmFlavor): string {
+  const semi = NOTE_SEMI[root];
+  if (semi === undefined || flavor !== 'spicy' || kind !== 'dom') return root;
+  return CHROMATIC[(semi + 6) % 12];
+}
+
+function chordNotesForFlavor(chord: ChordVoicing, flavor: ReharmFlavor): ChordVoicing {
+  const parsed = parseChordName(chord.name);
+  const firstNote = parseNoteName(chord.notes[0]);
+  if (!parsed || !firstNote) return chord;
+  const formula = REHARM_FORMULAS[flavor][parsed.kind];
+  const root = rootForFlavor(parsed.root, parsed.kind, flavor);
+  const rootMidi = rootMidiNear(root, firstNote.midi - formula[0]);
+  const name = `${root}${qualityForFlavor(parsed.kind, flavor, parsed.quality)}`;
+  return {
+    ...chord,
+    name,
+    notes: formula.map(interval => noteFromMidi(rootMidi + interval)),
+  };
+}
+
+function bassThirdForFlavor(root: string, kind: 'maj' | 'min' | 'dom' | 'dim', flavor: ReharmFlavor, original: string): string {
+  const parsed = parseNoteName(original);
+  if (!parsed) return original;
+  const interval = kind === 'min' || kind === 'dim' || (flavor === 'darker' && kind === 'maj') ? 3 : 4;
+  return noteFromMidi(rootMidiNear(root, parsed.midi - interval) + interval);
+}
+
+function bassFifthForFlavor(root: string, kind: 'maj' | 'min' | 'dom' | 'dim', flavor: ReharmFlavor, original: string): string {
+  const parsed = parseNoteName(original);
+  if (!parsed) return original;
+  const interval = kind === 'dim' || (flavor === 'darker' && kind === 'min') ? 6 : 7;
+  return noteFromMidi(rootMidiNear(root, parsed.midi - interval) + interval);
+}
+
+function bassRootForFlavor(root: string, original: string): string {
+  const parsed = parseNoteName(original);
+  if (!parsed) return original;
+  return noteFromMidi(rootMidiNear(root, parsed.midi));
+}
+
 export function transposeChordName(chordName: string, semitones: number): string {
   if (semitones === 0) return chordName;
   const match = chordName.match(/^([A-G][#b]?)(.*)/);
@@ -259,6 +378,33 @@ export function romanNumeralForChord(chordName: string, keyShift: number): strin
 
 export function getProgressionById(id: string): ProgressionDef {
   return PROGRESSIONS.find(p => p.id === id) ?? PROGRESSIONS[0];
+}
+
+export function getReharmonizedProgression(id: string, flavor: ReharmFlavor): ProgressionDef {
+  const progression = getProgressionById(id);
+  if (flavor === 'diatonic') return progression;
+
+  const chords = progression.chords.map(chord => chordNotesForFlavor(chord, flavor));
+  const bassRoots = progression.bassRoots.map((note, i) => {
+    const parsed = parseChordName(chords[i].name);
+    return parsed ? bassRootForFlavor(parsed.root, note) : note;
+  });
+  const bassThirds = progression.bassThirds.map((note, i) => {
+    const parsed = parseChordName(chords[i].name);
+    return parsed ? bassThirdForFlavor(parsed.root, parsed.kind, flavor, note) : note;
+  });
+  const bassFifths = progression.bassFifths.map((note, i) => {
+    const parsed = parseChordName(chords[i].name);
+    return parsed ? bassFifthForFlavor(parsed.root, parsed.kind, flavor, note) : note;
+  });
+
+  return {
+    ...progression,
+    chords,
+    bassRoots,
+    bassThirds,
+    bassFifths,
+  };
 }
 
 export function getPattern(mood: Mood, timeSignature: TimeSignature = '4/4'): RhythmPattern {

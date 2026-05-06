@@ -1,5 +1,5 @@
 import { DEFAULT_PARAMS } from './defaults';
-import type { BassStyle, EngineParams, Mood, TimeSignature } from './engine/types';
+import type { BassStyle, ChordVoice, EngineParams, Mood, ReharmFlavor, TimeSignature } from './engine/types';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
@@ -18,6 +18,8 @@ const TIME_SIG_DECODE: Record<string, TimeSignature> = {
 
 const MOODS = new Set<Mood>(['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy']);
 const BASS = new Set<BassStyle>(['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal']);
+const CHORD_VOICES = new Set<ChordVoice>(['rhodes', 'wurlitzer', 'muted-guitar', 'vibraphone']);
+const REHARM_FLAVORS = new Set<ReharmFlavor>(['diatonic', 'jazzy', 'darker', 'dreamy', 'spicy']);
 
 function encodeMix(mix: EngineParams['mix']): string {
   const order: (keyof EngineParams['mix'])[] = [
@@ -62,6 +64,12 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
 
   const prog = q.get('progression') ?? q.get('prog') ?? q.get('p');
   if (prog) out.progressionId = prog;
+
+  const reharm = q.get('reharm') ?? q.get('rh');
+  if (reharm && REHARM_FLAVORS.has(reharm as ReharmFlavor)) out.reharmFlavor = reharm as ReharmFlavor;
+
+  const voice = q.get('voice') ?? q.get('cv');
+  if (voice && CHORD_VOICES.has(voice as ChordVoice)) out.chordVoice = voice as ChordVoice;
 
   const bpm = q.get('bpm') ?? q.get('b');
   if (bpm !== null && bpm !== '') {
@@ -140,6 +148,11 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
     const n = Number(rev);
     if (Number.isFinite(n)) out.reverb = Math.max(0, Math.min(1, n));
   }
+  const vol = q.get('volume') ?? q.get('vol');
+  if (vol !== null && vol !== '') {
+    const n = Number(vol);
+    if (Number.isFinite(n)) out.masterVolume = Math.max(0, Math.min(2, n));
+  }
   const vin = q.get('vinyl') ?? q.get('vin');
   if (vin !== null && vin !== '') {
     const n = Number(vin);
@@ -149,6 +162,11 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
   if (tape !== null && tape !== '') {
     const n = Number(tape);
     if (Number.isFinite(n)) out.tape = Math.max(0, Math.min(1, n));
+  }
+  const crush = q.get('crush') ?? q.get('cr');
+  if (crush !== null && crush !== '') {
+    const n = Number(crush);
+    if (Number.isFinite(n)) out.crush = Math.max(0, Math.min(1, n));
   }
   const lo = q.get('lowCut') ?? q.get('lo');
   if (lo !== null && lo !== '') {
@@ -184,6 +202,8 @@ export function serializeParamsToSearch(params: EngineParams): string {
   if (params.mood !== d.mood) q.set('mood', params.mood);
   if (params.keyShift !== d.keyShift) q.set('key', NOTE_NAMES[params.keyShift] ?? 'C');
   if (params.progressionId !== d.progressionId) q.set('progression', params.progressionId);
+  if (params.reharmFlavor !== d.reharmFlavor) q.set('reharm', params.reharmFlavor);
+  if (params.chordVoice !== d.chordVoice) q.set('voice', params.chordVoice);
   if (params.bpm !== d.bpm) q.set('bpm', String(params.bpm));
   if (params.timeSignature !== d.timeSignature) q.set('ts', TIME_SIG_ENCODE[params.timeSignature]);
   if (params.bassStyle !== d.bassStyle) q.set('bass', params.bassStyle);
@@ -203,9 +223,11 @@ export function serializeParamsToSearch(params: EngineParams): string {
     q.set('ds', String(params.drumProb.snare));
     q.set('dh', String(params.drumProb.hihat));
   }
+  if (!numEq(params.masterVolume, d.masterVolume)) q.set('vol', String(params.masterVolume));
   if (!numEq(params.reverb, d.reverb)) q.set('rev', String(params.reverb));
   if (!numEq(params.vinyl, d.vinyl)) q.set('vin', String(params.vinyl));
   if (!numEq(params.tape, d.tape)) q.set('tape', String(params.tape));
+  if (!numEq(params.crush, d.crush)) q.set('crush', String(params.crush));
   if (params.lowCut !== d.lowCut) q.set('lo', String(Math.round(params.lowCut)));
   if (params.highCut !== d.highCut) q.set('hi', String(Math.round(params.highCut)));
 

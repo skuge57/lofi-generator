@@ -1,7 +1,7 @@
 import * as Tone from 'tone';
 import { createRng } from './rng';
-import { getProgressionById, getPattern, SONG_ARRANGEMENT, locateSection } from './musicTheory';
-import type { BassStyle, EngineParams, Mood, ProgressionDef, RhythmPattern, SectionInfo, InstrumentMix, TimeSignature } from './types';
+import { getReharmonizedProgression, getPattern, SONG_ARRANGEMENT, locateSection } from './musicTheory';
+import type { BassStyle, ChordVoice, EngineParams, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SectionInfo, InstrumentMix, TimeSignature } from './types';
 
 function cloneEngineParams(p: EngineParams): EngineParams {
   return {
@@ -12,6 +12,8 @@ function cloneEngineParams(p: EngineParams): EngineParams {
 }
 
 const DEFAULT_STEPS_PER_BAR = 16;
+const REVERB_SEND_GAIN = 1.15;
+type ChordSynth = Tone.PolySynth<Tone.FMSynth | Tone.AMSynth | Tone.Synth>;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
@@ -29,8 +31,10 @@ interface Motif {
 }
 
 export class LofiEngine {
-  private chordSynth: Tone.PolySynth<Tone.FMSynth>;
+  private chordSynth: ChordSynth;
   private chordTremolo: Tone.Tremolo;
+  private guitarSampler: Tone.Sampler;
+  private guitarFilter: Tone.Filter;
   private bassSynth: Tone.MonoSynth;
   private melodySynth: Tone.Synth;
   private counterSynth: Tone.Synth;
@@ -46,6 +50,8 @@ export class LofiEngine {
   private vinylPop: Tone.MembraneSynth;
 
   private reverb: Tone.Reverb;
+  private reverbSend: Tone.Gain;
+  private masterVolume: Tone.Gain;
   private limiter: Tone.Limiter;
   private lowpass: Tone.Filter;
   private highpass: Tone.Filter;
@@ -53,11 +59,14 @@ export class LofiEngine {
   private tapeWow: Tone.Vibrato;
   private tapeFlutter: Tone.Vibrato;
   private tapeTremble: Tone.Tremolo;
+  private bitCrusher: Tone.BitCrusher;
   private gates: Record<keyof EngineParams['mix'], Tone.Gain>;
 
   private sequence: Tone.Sequence<number> | null = null;
   private currentMood: Mood;
   private currentProgressionId: string;
+  private currentReharmFlavor: ReharmFlavor = 'diatonic';
+  private currentChordVoice: ChordVoice = 'rhodes';
   private currentOctaveShift = 0;
   private currentMelodyOctave = 0;
   private currentChordLength = 1.5;
@@ -131,6 +140,8 @@ export class LofiEngine {
     this.attachRng();
     this.currentMood = params.mood;
     this.currentProgressionId = params.progressionId;
+    this.currentReharmFlavor = params.reharmFlavor;
+    this.currentChordVoice = params.chordVoice;
     this.currentOctaveShift = params.octaveShift;
     this.currentMelodyOctave = params.melodyOctave;
     this.currentChordLength = params.chordLength;
@@ -144,18 +155,26 @@ export class LofiEngine {
     this.baseLowCut = params.lowCut;
     this.baseHighCut = params.highCut;
 
-    // Effects chain: instruments → gates → highpass → lowpass → tape → reverb → limiter
+    // Effects chain: instruments → gates → highpass → lowpass → tape → crusher → limiter
+    // Reverb runs in parallel as a send so adding ambience does not fade out the dry mix.
     // Chorus removed from master bus — it processed all instruments simultaneously.
     // The chord tremolo still provides movement on the pad specifically.
-    this.limiter = new Tone.Limiter(-3).toDestination();
-    this.reverb = new Tone.Reverb({ decay: 0.35, wet: params.reverb }).connect(this.limiter);
+    this.masterVolume = new Tone.Gain(clamp(params.masterVolume, 0, 2)).toDestination();
+    this.limiter = new Tone.Limiter(-3).connect(this.masterVolume);
+    this.reverb = new Tone.Reverb({ decay: 2.2, preDelay: 0.025, wet: 1 }).connect(this.limiter);
+    this.reverbSend = new Tone.Gain(params.reverb * REVERB_SEND_GAIN).connect(this.reverb);
     this.tapeTremble = new Tone.Tremolo({
       frequency: 0.65,
       depth: 0,
       type: 'sine',
       spread: 0,
       wet: 0,
-    }).connect(this.reverb).start();
+    }).start();
+    this.bitCrusher = new Tone.BitCrusher(16);
+    this.bitCrusher.wet.value = 0;
+    this.bitCrusher.connect(this.limiter);
+    this.bitCrusher.connect(this.reverbSend);
+    this.tapeTremble.connect(this.bitCrusher);
     this.tapeFlutter = new Tone.Vibrato({
       frequency: 6.2,
       depth: 0,
@@ -190,19 +209,47 @@ export class LofiEngine {
       vinyl:   new Tone.Gain(params.mix.vinyl ? params.vinyl * 0.03 : 0).connect(this.limiter),
     };
 
-    // Rhodes chord pad: FM synth with tremolo
-    // maxPolyphony 6 = 4 notes + 2 overlap slots during release (down from 8)
-    this.chordSynth = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 3.5,
-      modulationIndex: 5,
-      oscillator: { type: 'sine' },
-      envelope: { attack: 0.001, decay: 0.35, sustain: 0.45, release: 1.2 },
-      modulation: { type: 'sine' },
-      modulationEnvelope: { attack: 0.002, decay: 0.3, sustain: 0.1, release: 1.0 },
-      volume: -12,
-    });
-    this.chordSynth.maxPolyphony = 6;
     this.chordTremolo = new Tone.Tremolo(4, 0.3).connect(this.gates.chord).start();
+    this.guitarFilter = new Tone.Filter({
+      frequency: 2600,
+      type: 'lowpass',
+      Q: 0.6,
+    }).connect(this.chordTremolo);
+    this.guitarSampler = new Tone.Sampler({
+      urls: {
+        C3: 'C3.wav',
+        'C#3': 'Cs3.wav',
+        D3: 'D3.wav',
+        'D#3': 'Ds3.wav',
+        E3: 'E3.wav',
+        F3: 'F3.wav',
+        'F#3': 'Fs3.wav',
+        G3: 'G3.wav',
+        'G#3': 'Gs3.wav',
+        A3: 'A3.wav',
+        'A#3': 'As3.wav',
+        B3: 'B3.wav',
+        C4: 'C4.wav',
+        'C#4': 'Cs4.wav',
+        D4: 'D4.wav',
+        'D#4': 'Ds4.wav',
+        E4: 'E4.wav',
+        F4: 'F4.wav',
+        'F#4': 'Fs4.wav',
+        G4: 'G4.wav',
+        'G#4': 'Gs4.wav',
+        A4: 'A4.wav',
+        'A#4': 'As4.wav',
+        B4: 'B4.wav',
+        C5: 'C5.wav',
+      },
+      baseUrl: '/samples/guitar/',
+      attack: 0.001,
+      release: 0.045,
+      curve: 'exponential',
+      volume: -8,
+    }).connect(this.guitarFilter);
+    this.chordSynth = this.createChordSynth(params.chordVoice);
     this.chordSynth.connect(this.chordTremolo);
 
     // Bass
@@ -286,6 +333,7 @@ export class LofiEngine {
     Tone.getTransport().swing = clamp(params.swing, 0, 1);
     this.applyVinylAmount(params.vinyl, 0);
     this.applyTape(params.tape, 0);
+    this.applyCrusher(params.crush, 0);
     this.applyMix(params.mix);
     this.updateEnergyShaping(0);
 
@@ -304,6 +352,75 @@ export class LofiEngine {
       mix: p.mix ? { ...p.mix } : { ...this.snap.mix },
       drumProb: p.drumProb ? { ...p.drumProb } : { ...this.snap.drumProb },
     };
+  }
+
+  private createChordSynth(voice: ChordVoice): ChordSynth {
+    if (voice === 'wurlitzer') {
+      const synth = new Tone.PolySynth(Tone.FMSynth, {
+        harmonicity: 0.8,
+        modulationIndex: 16,
+        oscillator: { type: 'fatsawtooth', count: 2, spread: 12 },
+        envelope: { attack: 0.003, decay: 0.16, sustain: 0.28, release: 0.45 },
+        modulation: { type: 'square' },
+        modulationEnvelope: { attack: 0.001, decay: 0.12, sustain: 0.14, release: 0.22 },
+        volume: -12,
+      });
+      synth.maxPolyphony = 6;
+      this.chordTremolo.frequency.value = 5.8;
+      this.chordTremolo.depth.value = 0.1;
+      return synth;
+    }
+
+    if (voice === 'muted-guitar') {
+      const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'fattriangle', count: 2, spread: 4 },
+        envelope: { attack: 0.001, decay: 0.075, sustain: 0.015, release: 0.08 },
+        volume: -13,
+      });
+      synth.maxPolyphony = 8;
+      this.chordTremolo.frequency.value = 2.5;
+      this.chordTremolo.depth.value = 0;
+      return synth;
+    }
+
+    if (voice === 'vibraphone') {
+      const synth = new Tone.PolySynth(Tone.FMSynth, {
+        harmonicity: 3.01,
+        modulationIndex: 10,
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.004, decay: 1.15, sustain: 0.02, release: 1.8 },
+        modulation: { type: 'sine' },
+        modulationEnvelope: { attack: 0.002, decay: 0.85, sustain: 0, release: 1.1 },
+        volume: -13,
+      });
+      synth.maxPolyphony = 8;
+      this.chordTremolo.frequency.value = 6.8;
+      this.chordTremolo.depth.value = 0.42;
+      return synth;
+    }
+
+    const synth = new Tone.PolySynth(Tone.FMSynth, {
+      harmonicity: 3.5,
+      modulationIndex: 5,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.001, decay: 0.35, sustain: 0.45, release: 1.2 },
+      modulation: { type: 'sine' },
+      modulationEnvelope: { attack: 0.002, decay: 0.3, sustain: 0.1, release: 1.0 },
+      volume: -12,
+    });
+    synth.maxPolyphony = 6;
+    this.chordTremolo.frequency.value = 4;
+    this.chordTremolo.depth.value = 0.3;
+    return synth;
+  }
+
+  private applyChordVoice(voice: ChordVoice): void {
+    this.currentChordVoice = voice;
+    this.chordSynth.releaseAll();
+    this.guitarSampler.releaseAll();
+    this.chordSynth.dispose();
+    this.chordSynth = this.createChordSynth(voice);
+    this.chordSynth.connect(this.chordTremolo);
   }
 
   private restartSequenceFromBeginning(): void {
@@ -356,7 +473,7 @@ export class LofiEngine {
   }
 
   private rebuildCache(): void {
-    this.cachedProg = getProgressionById(this.currentProgressionId);
+    this.cachedProg = getReharmonizedProgression(this.currentProgressionId, this.currentReharmFlavor);
     this.cachedPattern = getPattern(this.currentMood, this.currentTimeSignature);
     this.currentStepsPerBar = this.cachedPattern.stepsPerBar;
     this.ensurePatternBuffers();
@@ -438,6 +555,13 @@ export class LofiEngine {
     this.tapeFlutter.depth.rampTo(tape * 0.2, rampTime);
     this.tapeTremble.wet.rampTo(tape * 0.45, rampTime);
     this.tapeTremble.depth.rampTo(tape * 0.18, rampTime);
+  }
+
+  private applyCrusher(amount: number, rampTime = 0.08): void {
+    const crush = clamp(amount, 0, 1);
+    const bits = 16 - crush * 12;
+    this.bitCrusher.bits.rampTo(bits, rampTime);
+    this.bitCrusher.wet.rampTo(crush * 0.9, rampTime);
   }
 
   private updateEnergyShaping(rampTime = 0.25): void {
@@ -671,6 +795,7 @@ export class LofiEngine {
     this.sequence = null;
     this.vinyl.stop();
     this.chordSynth.releaseAll();
+    this.guitarSampler.releaseAll();
   }
 
   // tick() is called on every 16th note step. It must not allocate — all data comes from caches.
@@ -712,7 +837,29 @@ export class LofiEngine {
 
     if (this.cachedChordStepSet.has(step)) {
       const jitter = this.rnd() * this.currentChordTiming * 0.12;
-      this.chordSynth.triggerAttackRelease(shiftedNotes, this.currentChordLength, time + jitter, 0.5 + this.rnd() * 0.1);
+      const chordTime = time + jitter;
+      if (this.currentChordVoice === 'muted-guitar') {
+        const dur = Math.min(this.currentChordLength, 0.16);
+        const strumDown = this.rnd() < 0.78;
+        const notes = strumDown ? shiftedNotes : [...shiftedNotes].reverse();
+        if (this.guitarSampler.loaded) {
+          notes.forEach((note, i) => {
+            const accent = i === 0 ? 0.72 : 0.5;
+            this.guitarSampler.triggerAttackRelease(note, dur, chordTime + i * 0.019, accent + this.rnd() * 0.08);
+          });
+        } else {
+          notes.forEach((note, i) => {
+            const accent = i === 0 ? 0.56 : 0.38;
+            this.chordSynth.triggerAttackRelease(note, dur, chordTime + i * 0.018, accent + this.rnd() * 0.08);
+          });
+        }
+      } else if (this.currentChordVoice === 'wurlitzer') {
+        this.chordSynth.triggerAttackRelease(shiftedNotes, Math.min(this.currentChordLength, 1.05), chordTime, 0.58 + this.rnd() * 0.08);
+      } else if (this.currentChordVoice === 'vibraphone') {
+        this.chordSynth.triggerAttackRelease(shiftedNotes, Math.max(0.8, Math.min(this.currentChordLength, 1.8)), chordTime, 0.54 + this.rnd() * 0.08);
+      } else {
+        this.chordSynth.triggerAttackRelease(shiftedNotes, this.currentChordLength, chordTime, 0.5 + this.rnd() * 0.1);
+      }
     }
 
     if (this.currentBassStyle === 'walking') {
@@ -803,6 +950,13 @@ export class LofiEngine {
       this.motif = null;
       needsRebuild = true;
     }
+    if (params.reharmFlavor !== undefined) {
+      this.currentReharmFlavor = params.reharmFlavor;
+      this.chordIndex = 0;
+      this.prevMelodyNote = null;
+      this.motif = null;
+      needsRebuild = true;
+    }
     if (params.octaveShift !== undefined) {
       this.currentOctaveShift = params.octaveShift;
       needsRebuild = true;
@@ -821,6 +975,9 @@ export class LofiEngine {
     if (params.chordTiming !== undefined) {
       this.currentChordTiming = params.chordTiming;
     }
+    if (params.chordVoice !== undefined && params.chordVoice !== this.currentChordVoice) {
+      this.applyChordVoice(params.chordVoice);
+    }
     if (params.swing !== undefined) {
       Tone.getTransport().swingSubdivision = '16n';
       Tone.getTransport().swing = clamp(params.swing, 0, 1);
@@ -832,14 +989,20 @@ export class LofiEngine {
       this.currentEnergy = params.energy;
       this.updateEnergyShaping();
     }
+    if (params.masterVolume !== undefined) {
+      this.masterVolume.gain.rampTo(clamp(params.masterVolume, 0, 2), 0.05);
+    }
     if (params.reverb !== undefined) {
-      this.reverb.wet.rampTo(params.reverb, 0.2);
+      this.reverbSend.gain.rampTo(clamp(params.reverb, 0, 1) * REVERB_SEND_GAIN, 0.2);
     }
     if (params.vinyl !== undefined) {
       this.applyVinylAmount(params.vinyl);
     }
     if (params.tape !== undefined) {
       this.applyTape(params.tape);
+    }
+    if (params.crush !== undefined) {
+      this.applyCrusher(params.crush);
     }
     if (params.lowCut !== undefined) {
       this.baseLowCut = params.lowCut;
@@ -925,6 +1088,8 @@ export class LofiEngine {
   dispose(): void {
     this.stop();
     this.chordSynth.dispose();
+    this.guitarSampler.dispose();
+    this.guitarFilter.dispose();
     this.chordTremolo.dispose();
     this.bassSynth.dispose();
     this.melodySynth.dispose();
@@ -940,12 +1105,15 @@ export class LofiEngine {
     this.vinylPop.dispose();
     (['chord', 'bass', 'kick', 'snare', 'hihat', 'melody', 'counter', 'vinyl'] as const).forEach(k => this.gates[k].dispose());
     this.reverb.dispose();
+    this.reverbSend.dispose();
     this.tapeSaturation.dispose();
     this.tapeWow.dispose();
     this.tapeFlutter.dispose();
     this.tapeTremble.dispose();
+    this.bitCrusher.dispose();
     this.lowpass.dispose();
     this.highpass.dispose();
     this.limiter.dispose();
+    this.masterVolume.dispose();
   }
 }
