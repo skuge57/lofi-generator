@@ -249,7 +249,7 @@ export class LofiEngine {
         B4: 'B4.wav',
         C5: 'C5.wav',
       },
-      baseUrl: '/samples/guitar/',
+      baseUrl: `${import.meta.env.BASE_URL}samples/guitar/`,
       attack: 0.001,
       release: 0.045,
       curve: 'exponential',

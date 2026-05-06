@@ -1,6 +1,6 @@
 # lofi.
 
-A browser-based lo-fi music generator. Procedurally synthesizes endless chill beats in real time using [Tone.js](https://tonejs.github.io/) — no samples, no loops, just oscillators, noise, and a few opinions about jazz harmony.
+A browser-based lo-fi music generator. Procedurally synthesizes endless chill beats in real time using [Tone.js](https://tonejs.github.io/) — mostly oscillators and noise, with an optional sampled guitar voice and a few opinions about jazz harmony.
 
 Built with React 19, TypeScript, and Vite.
 
@@ -12,12 +12,14 @@ Built with React 19, TypeScript, and Vite.
 - **6 bass styles** — `simple` (root + fifth), `walking` (root → 3rd → 5th → approach), `lazy` (sustained root + syncopated fifth), plus `bounce`, `dub`, and `pedal` lines
 - **Procedural melody** — short motifs that repeat for a few bars then mutate (inversion, contour jitter), with phrase endings snapped onto chord tones for tension/release
 - **Counter-melody** — a soft second voice a third or sixth below the lead, hugging chord tones for harmony
-- **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, drums dropped) → A (8). Sections that drop drums end on a snare-roll fill that telegraphs the next section.
+- **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, kick/snare dropped) → A (8). Transition sections end on a snare-roll fill that telegraphs the next section.
 - **Energy curve** — a single energy control shapes the song form by section, morphing drum density, hi-hat activity, melody activity, and filter brightness over the arrangement
-- **Per-instrument toggles** — mute chords, bass, kick, snare, hi-hat, melody, or vinyl crackle independently
+- **Per-instrument toggles** — mute chords, bass, kick, snare, hi-hat, melody, counter-melody, or vinyl crackle independently
 - **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, drum hit probability, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
+- **Seeded sharing** — a seed field plus URL-serialized settings make beats reproducible and easy to share
+- **Randomize** — generate a new full parameter set, including a fresh seed, from the header button
 - **Visual feedback** — current chord highlighted while the progression plays
-- **Zero allocations in the audio tick** — all note data is pre-cached and rebuilt only when params change, so the 16th-note scheduler stays GC-free
+- **Cached scheduler data** — harmonic/rhythm data is pre-cached, and the melody/counter buffers are reused per bar so the 16th-note scheduler stays light
 
 ## Stack
 
@@ -34,7 +36,11 @@ npm run dev
 
 Then open the URL Vite prints (usually `http://localhost:5173`) and click play. Audio won't start until you interact with the page — that's a browser autoplay policy, not a bug.
 
-### Other scripts
+## License
+
+Code is licensed under the MIT License. The bundled guitar samples in `public/samples/guitar` are from [`cluesurf/wave`](https://github.com/cluesurf/wave) and are stated upstream as public domain; see `public/samples/guitar/README.md` for the local source note.
+
+## Other scripts
 
 ```bash
 npm run build     # type-check + production build
@@ -44,11 +50,12 @@ npm run lint      # eslint
 
 ## How it works
 
-The audio engine (`src/engine/lofiEngine.ts`) drives a `Tone.Sequence` at 16th notes. On every tick it consults pre-built caches for the current chord, bass note, drum pattern, and melody buffer. When you change a parameter, the relevant cache is rebuilt off the audio thread.
+The audio engine (`src/engine/lofiEngine.ts`) drives a `Tone.Sequence` at 16th notes. On each step it consults pre-built caches for the current chord, bass note, and drum pattern. Melody and counter-melody buffers are generated once per bar and reused across that bar. When you change a parameter, the relevant cache is rebuilt outside the scheduled note callback where possible.
 
 - Chord progressions and rhythm patterns live in `src/engine/musicTheory.ts`
 - The signal chain is: instruments → per-instrument gates → highpass → lowpass → tape wow/flutter → bitcrusher → limiter → master volume → output, with reverb fed in parallel as a send.
 - The chord pad can switch between Rhodes/Wurli-style keys, sampled muted guitar, vibes, tape choir, synth strings, organ, and glassy FM tones; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, MetalSynth hat); vinyl texture layers filtered pink-noise dust with intermittent clicks, low pops, and brief dropouts
+- `src/urlState.ts` serializes most controls into the URL, including seed, mood, key, progression, reharmonization, voice, time signature, bass style, arrangement, mix, and tone settings
 
 ## Future plans
 
@@ -74,13 +81,15 @@ Rough roadmap, no promises:
 - [x] **Time signatures beyond 4/4** — 6/8, 3/4, 5/4 patterns
 
 ### UX
-- [ ] **Seeded generation** — a **seed** field (or derived from URL) so the same settings always reproduce the same beat; handy for sharing, e.g. `/?seed=blue-cafe-4921&key=E&mood=sad`
-- [ ] **Lock + randomize** — one action to randomize everything, with toggles to **lock** BPM, chords, drums, bass, melody, and tone / mix settings so only unlocked parts change
-- [ ] **Preset save/load** — store full parameter sets in localStorage, share via URL (complements seeded generation for full state vs. stochastic DNA)
+- [x] **Seeded generation + URL sharing** — a **seed** field and serialized URL settings reproduce/share the same beat, e.g. `/?seed=blue-cafe-4921&key=E&mood=sad`
+- [x] **Randomize** — one action generates a fresh full parameter set and seed
+- [ ] **Lockable randomize** — toggles to **lock** BPM, chords, drums, bass, melody, and tone / mix settings so only unlocked parts change
+- [ ] **Preset save/load** — store named full parameter sets in localStorage
 - [ ] **MIDI export** — render the current loop to a downloadable `.mid` file
 - [ ] **WAV/MP3 capture** — record N bars to an audio file via `OfflineAudioContext`
-- [ ] **Keyboard shortcuts** — space to play/pause, `[` `]` to shift key, etc.
-- [ ] **Mobile layout** — controls don't fit cleanly on narrow screens yet
+- [x] **Basic keyboard shortcuts** — space to play/pause, ArrowUp/ArrowDown to adjust master volume
+- [x] **Responsive layout** — controls collapse from three columns to two and then one column on narrower screens
+- [ ] **More keyboard shortcuts** — `[` `]` to shift key, quick randomize, and focused transport/mix controls
 - [ ] **Visualizer upgrade** — animated waveform/spectrum, or a subtle scrolling piano roll
 
 ### Engineering
