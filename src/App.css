@@ -597,6 +597,12 @@ input[type='range']::-moz-range-thumb {
 }
 
 /* Instrument toggles */
+.instrument-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .instrument-toggles {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -634,6 +640,34 @@ input[type='range']::-moz-range-thumb {
 .inst-btn:hover {
   border-color: #c8a87a88;
   color: #c8a87a;
+}
+
+.instrument-volume-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.instrument-volume-row {
+  display: grid;
+  grid-template-columns: 58px minmax(70px, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #8a7060;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.instrument-volume-row input[type='range'] {
+  min-width: 0;
+}
+
+.instrument-volume-val {
+  color: #c8a87a;
+  font-size: 0.68rem;
+  text-align: right;
 }
 
 /* Key selector */
@@ -753,6 +787,10 @@ input[type='range']::-moz-range-thumb {
 
   .instrument-toggles {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .instrument-volume-grid {
+    grid-template-columns: 1fr;
   }
 
   .slider-row {

@@ -23,6 +23,8 @@ export interface InstrumentMix {
   counter: boolean;
 }
 
+export type InstrumentVolumes = Record<keyof InstrumentMix, number>;
+
 export interface EngineParams {
   /** When set, musical randomness is derived from this string and the arrangement fingerprint so the same URL/settings reproduce the same beat. */
   seed?: string;
@@ -40,6 +42,7 @@ export interface EngineParams {
   lowCut: number;
   highCut: number;
   mix: InstrumentMix;
+  instrumentVolume: InstrumentVolumes;
   octaveShift: number;
   chordLength: number;
   chordTiming: number;

@@ -29,24 +29,39 @@ const CHORD_VOICES = new Set<ChordVoice>([
   'glass-pad',
 ]);
 const REHARM_FLAVORS = new Set<ReharmFlavor>(['diatonic', 'jazzy', 'darker', 'dreamy', 'spicy']);
+const INSTRUMENT_ORDER: (keyof EngineParams['mix'])[] = [
+  'chord', 'bass', 'kick', 'snare', 'hihat', 'vinyl', 'melody', 'counter',
+];
 
 function encodeMix(mix: EngineParams['mix']): string {
-  const order: (keyof EngineParams['mix'])[] = [
-    'chord', 'bass', 'kick', 'snare', 'hihat', 'vinyl', 'melody', 'counter',
-  ];
-  return order.map(k => (mix[k] ? '1' : '0')).join('');
+  return INSTRUMENT_ORDER.map(k => (mix[k] ? '1' : '0')).join('');
 }
 
 function decodeMix(s: string): EngineParams['mix'] | null {
   if (!/^[01]{8}$/.test(s)) return null;
-  const order: (keyof EngineParams['mix'])[] = [
-    'chord', 'bass', 'kick', 'snare', 'hihat', 'vinyl', 'melody', 'counter',
-  ];
   const mix = { ...DEFAULT_PARAMS.mix };
   for (let i = 0; i < 8; i++) {
-    mix[order[i]] = s[i] === '1';
+    mix[INSTRUMENT_ORDER[i]] = s[i] === '1';
   }
   return mix;
+}
+
+function encodeInstrumentVolume(volume: EngineParams['instrumentVolume']): string {
+  return INSTRUMENT_ORDER.map(k => String(Number(volume[k].toFixed(2)))).join(',');
+}
+
+function decodeInstrumentVolume(s: string): EngineParams['instrumentVolume'] | null {
+  const parts = s.split(',');
+  if (parts.length !== INSTRUMENT_ORDER.length) return null;
+  const volume = { ...DEFAULT_PARAMS.instrumentVolume };
+
+  for (let i = 0; i < parts.length; i++) {
+    const n = Number(parts[i]);
+    if (!Number.isFinite(n)) return null;
+    volume[INSTRUMENT_ORDER[i]] = Math.max(0, Math.min(1.5, n));
+  }
+
+  return volume;
 }
 
 function parseNoteKey(raw: string): number | null {
@@ -202,6 +217,12 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
     if (m) out.mix = m;
   }
 
+  const iv = q.get('instrumentVolume') ?? q.get('iv');
+  if (iv) {
+    const volume = decodeInstrumentVolume(iv);
+    if (volume) out.instrumentVolume = volume;
+  }
+
   return out;
 }
 
@@ -253,6 +274,10 @@ export function serializeParamsToSearch(params: EngineParams): string {
   const mixEnc = encodeMix(params.mix);
   const defMix = encodeMix(d.mix);
   if (mixEnc !== defMix) q.set('mix', mixEnc);
+
+  const instVolEnc = encodeInstrumentVolume(params.instrumentVolume);
+  const defInstVolEnc = encodeInstrumentVolume(d.instrumentVolume);
+  if (instVolEnc !== defInstVolEnc) q.set('iv', instVolEnc);
 
   const s = q.toString();
   return s;

@@ -10,8 +10,8 @@ Built with React 19, TypeScript, and Vite.
 - **8 rhythmic moods** — `chill`, `sad`, `jazzy`, `dreamy`, `rainy`, `dusty`, `upbeat`, and `sleepy`, each with its own kick/snare/hihat pattern and chord placement
 - **4 time signatures** — switch between `4/4`, `3/4`, `5/4`, and `6/8` with dedicated drum, chord, bass, and fill patterns
 - **6 bass styles** — `simple` (root + fifth), `walking` (root → 3rd → 5th → approach), `lazy` (sustained root + syncopated fifth), plus `bounce`, `dub`, and `pedal` lines
-- **Procedural melody** — short motifs that repeat for a few bars then mutate (inversion, contour jitter), with phrase endings snapped onto chord tones for tension/release
-- **Counter-melody** — a soft second voice a third or sixth below the lead, hugging chord tones for harmony
+- **Procedural melody** — progression-level call/answer themes that repeat across chord cycles before mutating, with phrase endings snapped onto chord tones for tension/release
+- **Counter-melody** — a soft second voice that harmonizes key lead notes and replies in nearby rests, staying a third or sixth below on chord tones
 - **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, kick/snare dropped) → A (8). Transition sections end on a snare-roll fill that telegraphs the next section.
 - **Energy curve** — a single energy control shapes the song form by section, morphing drum density, hi-hat activity, melody activity, and filter brightness over the arrangement
 - **Per-instrument toggles** — mute chords, bass, kick, snare, hi-hat, melody, counter-melody, or vinyl crackle independently
@@ -76,7 +76,7 @@ Rough roadmap, no promises:
 - [x] **Chord reharmonization** — optional flavor per progression: *diatonic*, *jazzy*, *darker*, *dreamy*, *spicy* — e.g. swap plain V for V13, tritone substitutions, or passing diminished chords while keeping the same Roman skeleton
 - [x] **Voice-leading mode** — choose close inversions so pad voices move stepwise between changes instead of big jumps; warmer, more "played" pads
 - [x] **Smarter melody** — motif development (repeat-and-vary) instead of fresh phrases each bar; tension/release shaping toward chord tones
-- [x] **Counter-melody / second voice** — soft harmony line a third or sixth below the lead
+- [x] **Counter-melody / second voice** — soft harmony and answer line a third or sixth below the lead
 - [x] **Swing / shuffle amount** — variable 16th-note swing slider
 - [x] **Time signatures beyond 4/4** — 6/8, 3/4, 5/4 patterns
 

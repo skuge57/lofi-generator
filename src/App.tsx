@@ -73,7 +73,6 @@ function randomizeParams(current: EngineParams): EngineParams {
     },
     keyShift: randomInt(0, 11),
     bassStyle: choice(BASS_STYLES),
-    songForm: Math.random() < 0.6,
     energy: randomInt(35, 95),
     timeSignature: choice(TIME_SIGNATURES),
   };
@@ -243,7 +242,9 @@ export default function App() {
           />
           <InstrumentToggles
             mix={params.mix}
-            onChange={mix => handleParamChange({ mix })}
+            volume={params.instrumentVolume}
+            onMixChange={mix => handleParamChange({ mix })}
+            onVolumeChange={instrumentVolume => handleParamChange({ instrumentVolume })}
           />
           <RhythmControls params={params} onChange={handleParamChange} />
         </div>

@@ -7,6 +7,7 @@ function cloneEngineParams(p: EngineParams): EngineParams {
   return {
     ...p,
     mix: { ...p.mix },
+    instrumentVolume: { ...p.instrumentVolume },
     drumProb: { ...p.drumProb },
   };
 }
@@ -27,11 +28,13 @@ type MelodyDur = '8n' | '4n' | '2n';
 
 interface Motif {
   // Pitch deltas relative to the bar's anchor position in the sorted melody pool.
-  // First entry is always 0 (the anchor itself).
+  // Some phrase endings intentionally start above the anchor before resolving.
   deltas: number[];
   durs: MelodyDur[];
   // Where in the bar the motif starts (0–4 sixteenths).
   startStep: number;
+  // Phrase-level lift/drop so each chord slot keeps a recognizable contour.
+  anchorOffset: number;
 }
 
 export class LofiEngine {
@@ -44,7 +47,8 @@ export class LofiEngine {
   private counterSynth: Tone.Synth;
   private kick: Tone.MembraneSynth;
   private snare: Tone.NoiseSynth;
-  private hihat: Tone.MetalSynth;
+  private hihat: Tone.NoiseSynth;
+  private hihatFilter: Tone.Filter;
   private vinyl: Tone.Noise;
   private vinylGain: Tone.Gain;
   private vinylDustGain: Tone.Gain;
@@ -132,15 +136,17 @@ export class LofiEngine {
 
   // Pre-allocated melody pattern buffer — cleared and reused each bar
   private melodyPatternBuf: ({ note: string; dur: MelodyDur } | null)[] = new Array(DEFAULT_STEPS_PER_BAR).fill(null);
-  // Counter-melody buffer: a soft harmony line a third or sixth below the lead,
-  // populated only on longer notes so the texture stays sparse.
+  // Counter-melody buffer: a soft harmony/answer line below the lead,
+  // populated sparsely so it supports the hook instead of competing with it.
   private counterPatternBuf: ({ note: string; dur: MelodyDur } | null)[] = new Array(DEFAULT_STEPS_PER_BAR).fill(null);
   private prevMelodyNote: string | null = null;
 
-  // Motif state — the current repeating idea and how many bars it has lived.
-  private motif: Motif | null = null;
-  private motifAge = 0;
-  private motifMaxBars = 0;
+  // Theme state — a call/answer phrase spanning the full chord progression.
+  // It repeats for several progression cycles before a new idea is composed.
+  private theme: Motif[] | null = null;
+  private themeCycleAge = 0;
+  private themeMaxCycles = 0;
+  private lastThemeChordIndex = -1;
 
   private rnd: () => number = Math.random;
   /** Latest params from the UI — used to build deterministic RNG state from seed + arrangement. */
@@ -211,16 +217,16 @@ export class LofiEngine {
     this.lowpass = new Tone.Filter(params.highCut, 'lowpass').connect(this.tapeSaturation);
     this.highpass = new Tone.Filter(params.lowCut, 'highpass').connect(this.lowpass);
 
-    const g = (on: boolean) => new Tone.Gain(on ? 1 : 0).connect(this.highpass);
+    const g = (on: boolean, level: number) => new Tone.Gain(on ? level : 0).connect(this.highpass);
     this.gates = {
-      chord:   g(params.mix.chord),
-      bass:    g(params.mix.bass),
-      kick:    g(params.mix.kick),
-      snare:   g(params.mix.snare),
-      hihat:   g(params.mix.hihat),
-      melody:  g(params.mix.melody),
-      counter: g(params.mix.counter),
-      vinyl:   new Tone.Gain(params.mix.vinyl ? params.vinyl * 0.03 : 0).connect(this.limiter),
+      chord:   g(params.mix.chord, params.instrumentVolume.chord),
+      bass:    g(params.mix.bass, params.instrumentVolume.bass),
+      kick:    g(params.mix.kick, params.instrumentVolume.kick),
+      snare:   g(params.mix.snare, params.instrumentVolume.snare),
+      hihat:   g(params.mix.hihat, params.instrumentVolume.hihat),
+      melody:  g(params.mix.melody, params.instrumentVolume.melody),
+      counter: g(params.mix.counter, params.instrumentVolume.counter),
+      vinyl:   new Tone.Gain(params.mix.vinyl ? params.vinyl * 0.03 * params.instrumentVolume.vinyl : 0).connect(this.limiter),
     };
 
     this.chordSidechain = new Tone.Gain(1).connect(this.gates.chord);
@@ -308,15 +314,16 @@ export class LofiEngine {
     }).connect(this.gates.snare);
 
     // Hi-hat
-    this.hihat = new Tone.MetalSynth({
-      envelope: { attack: 0.001, decay: 0.04, release: 0.01 },
-      harmonicity: 5.1,
-      modulationIndex: 32,
-      resonance: 4000,
-      octaves: 1.5,
-      volume: -22,
+    this.hihatFilter = new Tone.Filter({
+      frequency: 3200,
+      type: 'highpass',
+      Q: 0.7,
     }).connect(this.gates.hihat);
-    this.hihat.frequency.value = 400;
+    this.hihat = new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: { attack: 0.001, decay: 0.045, sustain: 0, release: 0.018 },
+      volume: -15,
+    }).connect(this.hihatFilter);
 
     // Vinyl texture: steady filtered bed plus transient clicks and low pops.
     this.vinylGain = this.gates.vinyl;
@@ -345,6 +352,7 @@ export class LofiEngine {
     }).connect(this.vinylGain);
 
     this._mix = params.mix;
+    this._instrumentVolume = params.instrumentVolume;
     Tone.getTransport().bpm.value = params.bpm;
     Tone.getTransport().swingSubdivision = '16n';
     Tone.getTransport().swing = clamp(params.swing, 0, 1);
@@ -367,6 +375,7 @@ export class LofiEngine {
       ...this.snap,
       ...p,
       mix: p.mix ? { ...p.mix } : { ...this.snap.mix },
+      instrumentVolume: p.instrumentVolume ? { ...p.instrumentVolume } : { ...this.snap.instrumentVolume },
       drumProb: p.drumProb ? { ...p.drumProb } : { ...this.snap.drumProb },
     };
   }
@@ -507,6 +516,7 @@ export class LofiEngine {
 
   private _vinylLevel = 0.01;
   private _mix: EngineParams['mix'];
+  private _instrumentVolume: EngineParams['instrumentVolume'];
   private activeMix!: InstrumentMix;
 
   private applyVinylAmount(amount: number, rampTime = 0.2): void {
@@ -514,7 +524,7 @@ export class LofiEngine {
     this._vinylLevel = vinyl * 0.055;
     this.vinylDustGain.gain.rampTo(0.18 + vinyl * 0.32, rampTime);
     this.vinylDustFilter.frequency.rampTo(1100 + vinyl * 2400, rampTime);
-    if (this.effectiveMix().vinyl) this.vinylGain.gain.rampTo(this._vinylLevel, rampTime);
+    if (this.effectiveMix().vinyl) this.vinylGain.gain.rampTo(this._vinylLevel * this._instrumentVolume.vinyl, rampTime);
   }
 
   private tickVinyl(time: number, step: number): void {
@@ -644,9 +654,9 @@ export class LofiEngine {
   private applyMix(mix: EngineParams['mix']): void {
     this.activeMix = mix;
     (['chord', 'bass', 'kick', 'snare', 'hihat', 'melody', 'counter'] as const).forEach(k => {
-      this.gates[k].gain.rampTo(mix[k] ? 1 : 0, 0.02);
+      this.gates[k].gain.rampTo(mix[k] ? this._instrumentVolume[k] : 0, 0.02);
     });
-    this.gates.vinyl.gain.rampTo(mix.vinyl ? this._vinylLevel : 0, 0.05);
+    this.gates.vinyl.gain.rampTo(mix.vinyl ? this._vinylLevel * this._instrumentVolume.vinyl : 0, 0.05);
   }
 
   private triggerSidechain(time: number, intensity = 1): void {
@@ -706,7 +716,7 @@ export class LofiEngine {
     this.activeKickScale = clamp(density * (0.75 + energy * 0.35), 0, 1.25);
     this.activeSnareScale = clamp(density * (0.7 + energy * 0.4), 0, 1.2);
     this.activeHihatScale = clamp(density * (0.45 + energy * 0.75), 0, 1.3);
-    this.activeMelodyChance = clamp(0.28 + energy * 0.45, 0.18, 0.78);
+    this.activeMelodyChance = clamp(0.46 + energy * 0.4, 0.34, 0.9);
 
     const filterTilt = sec?.filterTilt ?? 1;
     const highCut = clamp(this.baseHighCut * filterTilt * (0.58 + energy * 0.5), 500, 18000);
@@ -737,9 +747,10 @@ export class LofiEngine {
     this.currentStep = 0;
     this.chordIndex = this.cachedProg.chords.length - 1;
     this.prevMelodyNote = null;
-    this.motif = null;
-    this.motifAge = 0;
-    this.motifMaxBars = 0;
+    this.theme = null;
+    this.themeCycleAge = 0;
+    this.themeMaxCycles = 0;
+    this.lastThemeChordIndex = -1;
     this.currentBar = 0;
     this.updateSection();
     this.applyEffectiveMix();
@@ -844,35 +855,100 @@ export class LofiEngine {
     });
   }
 
-  // Builds a fresh motif: a small directed melodic idea that we'll repeat (with
-  // variations) for the next several bars. The motif is stored as deltas
-  // relative to the bar's anchor position in the sorted pool, so when the
-  // anchor moves with the chord change the same shape replays at a new pitch.
-  private generateMotif(): Motif {
-    const maxExtraNotes = this.activeEnergy > 0.78 ? 2 : this.activeEnergy > 0.48 ? 1 : 0;
-    const noteCount = 1 + Math.floor(this.rnd() * (maxExtraNotes + 1)) + (this.activeEnergy > 0.82 && this.rnd() < 0.45 ? 1 : 0);
-    const deltas: number[] = [0];
-    let cur = 0;
-    let dir = this.rnd() < 0.5 ? 1 : -1;
-    for (let i = 1; i < noteCount; i++) {
-      const jump = this.rnd() < 0.86 ? 1 : 2; // mostly stepwise, rare skip
-      cur += dir * jump;
-      deltas.push(cur);
-      if (this.rnd() < 0.2) dir = -dir;
-    }
-    const durs: MelodyDur[] = [];
-    for (let i = 0; i < noteCount; i++) {
-      const isLast = i === noteCount - 1;
-      durs.push(isLast
-        ? (this.rnd() < 0.72 ? '2n' : '4n')
-        : (this.rnd() < 0.72 ? '4n' : '8n'));
-    }
-    const startChoices = this.activeEnergy > 0.75 ? [0, 2, 4] : [0, 4, 6];
+  private motifWith(
+    deltas: number[],
+    durs: MelodyDur[],
+    startStep: number,
+    anchorOffset: number
+  ): Motif {
     return {
       deltas,
       durs,
-      startStep: startChoices[Math.floor(this.rnd() * startChoices.length)] ?? 0,
+      startStep: Math.min(startStep, Math.max(0, this.currentStepsPerBar - 6)),
+      anchorOffset,
     };
+  }
+
+  // Builds a fresh theme: a small call/answer phrase mapped across the whole
+  // progression. Each chord slot keeps its rhythmic identity and contour, so
+  // the listener hears an actual hook before variations begin.
+  private generateTheme(): Motif[] {
+    const templates = [
+      {
+        call: [0, 1, 2, 1],
+        answer: [0, -1, 0, 2],
+        lift: [0, 1, 3, 2],
+        cadence: [1, 0, -1, 0],
+        durs: ['8n', '8n', '4n', '4n'] as MelodyDur[],
+        answerDurs: ['4n', '8n', '8n', '2n'] as MelodyDur[],
+        cadenceDurs: ['8n', '8n', '4n', '2n'] as MelodyDur[],
+        offsets: [0, 0, 1, -1],
+        starts: [0, 2, 0, 0],
+      },
+      {
+        call: [0, 2, 1, 0],
+        answer: [0, 1, -1, 0],
+        lift: [0, 2, 3, 1],
+        cadence: [0, -2, -1, 0],
+        durs: ['4n', '8n', '8n', '4n'] as MelodyDur[],
+        answerDurs: ['8n', '8n', '4n', '2n'] as MelodyDur[],
+        cadenceDurs: ['4n', '8n', '8n', '2n'] as MelodyDur[],
+        offsets: [0, 1, 1, -1],
+        starts: [0, 0, 2, 0],
+      },
+      {
+        call: [0, -1, 1, 2],
+        answer: [0, 1, 0, -1],
+        lift: [0, 1, 2, 3],
+        cadence: [2, 1, -1, 0],
+        durs: ['8n', '4n', '8n', '4n'] as MelodyDur[],
+        answerDurs: ['4n', '4n', '8n', '2n'] as MelodyDur[],
+        cadenceDurs: ['8n', '8n', '4n', '2n'] as MelodyDur[],
+        offsets: [0, -1, 1, 0],
+        starts: [0, 2, 0, 0],
+      },
+    ];
+    const t = templates[Math.floor(this.rnd() * templates.length)] ?? templates[0];
+    const chordCount = this.cachedProg.chords.length;
+    const theme: Motif[] = [];
+
+    for (let i = 0; i < chordCount; i++) {
+      const phrasePos = i % 4;
+      const isCadence = i === chordCount - 1;
+      const deltas = isCadence
+        ? t.cadence
+        : phrasePos === 2
+          ? t.lift
+          : phrasePos === 1
+            ? t.answer
+            : t.call;
+      const durs = isCadence
+        ? t.cadenceDurs
+        : phrasePos === 1
+          ? t.answerDurs
+          : t.durs;
+      theme.push(this.motifWith(
+        deltas,
+        durs,
+        t.starts[phrasePos] ?? 0,
+        t.offsets[phrasePos] ?? 0
+      ));
+    }
+
+    return theme;
+  }
+
+  private ensureThemeForCurrentChord(): void {
+    const wrapped = this.lastThemeChordIndex >= 0 && this.chordIndex < this.lastThemeChordIndex;
+    if (wrapped) this.themeCycleAge++;
+
+    if (!this.theme || (wrapped && this.themeCycleAge >= this.themeMaxCycles)) {
+      this.theme = this.generateTheme();
+      this.themeCycleAge = 0;
+      this.themeMaxCycles = 2 + Math.floor(this.rnd() * 3); // 2–4 full progression cycles
+    }
+
+    this.lastThemeChordIndex = this.chordIndex;
   }
 
   // Snap a sorted-pool position to the nearest chord tone for the current chord.
@@ -889,8 +965,8 @@ export class LofiEngine {
   // Picks a chord tone below the lead — preferring a third (≈2 pool steps down)
   // and falling back to a sixth — so the harmony reads as a third or sixth.
   // Returns -1 if no chord tone sits below the lead.
-  private findCounterPos(leadPos: number, chordTonePos: number[]): number {
-    const target = leadPos - 2;
+  private findCounterPos(leadPos: number, chordTonePos: number[], preferredStepsDown = 2): number {
+    const target = leadPos - preferredStepsDown;
     let best = -1;
     let bestDist = Infinity;
     for (let i = 0; i < chordTonePos.length; i++) {
@@ -902,11 +978,23 @@ export class LofiEngine {
     return best;
   }
 
-  // Renders the active motif into the melody (and counter) buffers for this bar.
-  // Motif lifecycle: a fresh motif is generated, repeated for 3–6 bars with
-  // light variations (inversion, transposition jitter), then replaced. Anchor
-  // position tracks the previous bar's last note so phrases connect smoothly,
-  // and the final note of every motif is snapped to a chord tone for resolution.
+  private placeCounterHit(step: number, leadPos: number, chordTonePos: number[], dur: MelodyDur, preferredStepsDown = 2): void {
+    if (step < 0 || step >= this.currentStepsPerBar || this.counterPatternBuf[step] !== null) return;
+
+    const cPos = this.findCounterPos(leadPos, chordTonePos, preferredStepsDown);
+    if (cPos >= 0) {
+      this.counterPatternBuf[step] = {
+        note: this.cachedMelodyNotes[this.cachedSortedMelodyIdx[cPos]],
+        dur,
+      };
+    }
+  }
+
+  // Renders the active theme cell into the melody (and counter) buffers for this bar.
+  // Theme lifecycle: a fresh call/answer phrase spans the progression, repeats
+  // verbatim once, then gets light contour/rhythm variations before being replaced.
+  // Anchor position tracks the previous bar's last note so phrases connect
+  // smoothly, and strong notes snap to chord tones for tension/release.
   private generateMelodyPattern(): void {
     this.melodyPatternBuf.fill(null);
     this.counterPatternBuf.fill(null);
@@ -917,12 +1005,8 @@ export class LofiEngine {
 
     const chordTonePos = this.cachedChordTonePos[this.chordIndex];
 
-    if (!this.motif || this.motifAge >= this.motifMaxBars) {
-      this.motif = this.generateMotif();
-      this.motifAge = 0;
-      this.motifMaxBars = 3 + Math.floor(this.rnd() * 4); // 3–6 bars
-    }
-    const motif = this.motif;
+    this.ensureThemeForCurrentChord();
+    const motif = this.theme?.[this.chordIndex] ?? this.generateTheme()[0];
 
     // Anchor: nearest pool position to where the previous bar left off, so the
     // motif rides naturally on top of the changing chord. On the very first
@@ -940,14 +1024,17 @@ export class LofiEngine {
     } else {
       anchor = chordTonePos[Math.floor(chordTonePos.length / 2)] ?? Math.floor(poolLen / 2);
     }
+    anchor = this.nearestChordTonePos(
+      Math.max(0, Math.min(poolLen - 1, anchor + motif.anchorOffset)),
+      chordTonePos
+    );
 
-    // Variations applied at older motif ages so the listener hears the idea
-    // repeat first, then evolve. Inversion flips the contour; the jitter
-    // version nudges every delta slightly to sidestep verbatim repetition.
+    // Variations happen after a full cycle, preserving the hook while preventing
+    // the phrase from becoming a hard loop.
     let workingDeltas = motif.deltas;
-    if (this.motifAge === 2 && this.rnd() < 0.45) {
-      workingDeltas = motif.deltas.map(d => -d);
-    } else if (this.motifAge >= 3 && this.rnd() < 0.5) {
+    if (this.themeCycleAge >= 2 && this.chordIndex % 2 === 1 && this.rnd() < 0.42) {
+      workingDeltas = motif.deltas.map((d, i) => i === 0 ? d : -d);
+    } else if (this.themeCycleAge >= 1 && this.rnd() < 0.36) {
       workingDeltas = motif.deltas.map((d, i) =>
         i === 0 ? d : d + (this.rnd() < 0.5 ? 1 : -1)
       );
@@ -969,21 +1056,23 @@ export class LofiEngine {
       const note = this.cachedMelodyNotes[sorted[pos]];
       this.melodyPatternBuf[step] = { note, dur };
 
-      // Counter line: only on the longer notes so the texture stays sparse.
-      if (dur !== '8n') {
-        const cPos = this.findCounterPos(pos, chordTonePos);
-        if (cPos >= 0) {
-          this.counterPatternBuf[step] = {
-            note: this.cachedMelodyNotes[sorted[cPos]],
-            dur,
-          };
-        }
+      // Counter line: harmonize structural notes, then answer in nearby rests.
+      // That keeps it tied to the theme without merely doubling the lead.
+      if (dur !== '8n' && (i === 0 || i === lastIdx || this.activeEnergy < 0.82)) {
+        this.placeCounterHit(step, pos, chordTonePos, dur === '2n' ? '4n' : dur, 2);
+      }
+      const answerStep = step + (dur === '2n' ? 4 : 2);
+      const answerPos = Math.max(0, Math.min(poolLen - 1, pos + (i % 2 === 0 ? -1 : 1)));
+      if (
+        answerStep < this.currentStepsPerBar &&
+        this.melodyPatternBuf[answerStep] === null &&
+        (i === 1 || i === lastIdx || this.activeEnergy > 0.62)
+      ) {
+        this.placeCounterHit(answerStep, answerPos, chordTonePos, '8n', 3);
       }
 
       step += dur === '2n' ? 8 : dur === '4n' ? 4 : 2;
     }
-
-    this.motifAge++;
   }
 
   async start(): Promise<void> {
@@ -1036,7 +1125,7 @@ export class LofiEngine {
     }
 
     if (this.activeMix.hihat && this.cachedPattern.hihat[step] && this.rnd() < this.currentDrumProb.hihat * this.activeHihatScale) {
-      this.hihat.triggerAttackRelease('32n', time, 0.24 + this.activeEnergy * 0.18 + this.rnd() * 0.16);
+      this.hihat.triggerAttackRelease('32n', time, 0.5 + this.activeEnergy * 0.18 + this.rnd() * 0.12);
     }
 
     // Snare-roll fill on the last beat group of a fill bar, telegraphing the next section.
@@ -1135,15 +1224,25 @@ export class LofiEngine {
     }
 
     const melHit = this.melodyPatternBuf[step];
-    if (this.activeMix.melody && melHit !== null && this.rnd() < this.activeMelodyChance) {
+    const counterHit = this.counterPatternBuf[step];
+    if (melHit !== null || counterHit !== null) {
       const jitter = this.rnd() * this.currentChordTiming * 0.08;
-      this.melodySynth.triggerAttackRelease(melHit.note, melHit.dur, time + jitter, 0.34 + this.activeEnergy * 0.18 + this.rnd() * 0.12);
-      this.prevMelodyNote = melHit.note;
+      let melodyFired = false;
 
-      const counterHit = this.counterPatternBuf[step];
+      if (this.activeMix.melody && melHit !== null && this.rnd() < this.activeMelodyChance) {
+        melodyFired = true;
+        this.melodySynth.triggerAttackRelease(melHit.note, melHit.dur, time + jitter, 0.34 + this.activeEnergy * 0.18 + this.rnd() * 0.12);
+        this.prevMelodyNote = melHit.note;
+      }
+
       if (this.activeMix.counter && counterHit !== null) {
-        // Same jitter so lead and harmony lock together rhythmically.
-        this.counterSynth.triggerAttackRelease(counterHit.note, counterHit.dur, time + jitter, 0.32 + this.rnd() * 0.1);
+        const counterChance = melHit !== null
+          ? 0.88
+          : clamp(0.48 + this.activeEnergy * 0.25, 0.42, 0.78);
+        if (melodyFired || this.rnd() < counterChance) {
+          const counterDelay = melHit !== null ? 0 : this.rnd() * 0.012;
+          this.counterSynth.triggerAttackRelease(counterHit.note, counterHit.dur, time + jitter + counterDelay, 0.28 + this.rnd() * 0.09);
+        }
       }
     }
 
@@ -1168,15 +1267,17 @@ export class LofiEngine {
       this.currentProgressionId = params.progressionId;
       this.chordIndex = 0;
       this.prevMelodyNote = null;
-      // New progression deserves a new motif rather than carrying the old shape over.
-      this.motif = null;
+      // New progression deserves a new theme rather than carrying the old shape over.
+      this.theme = null;
+      this.lastThemeChordIndex = -1;
       needsRebuild = true;
     }
     if (params.reharmFlavor !== undefined) {
       this.currentReharmFlavor = params.reharmFlavor;
       this.chordIndex = 0;
       this.prevMelodyNote = null;
-      this.motif = null;
+      this.theme = null;
+      this.lastThemeChordIndex = -1;
       needsRebuild = true;
     }
     if (params.octaveShift !== undefined) {
@@ -1244,6 +1345,10 @@ export class LofiEngine {
     }
     if (params.mix !== undefined) {
       this._mix = params.mix;
+      this.applyEffectiveMix();
+    }
+    if (params.instrumentVolume !== undefined) {
+      this._instrumentVolume = params.instrumentVolume;
       this.applyEffectiveMix();
     }
     if (params.bassStyle !== undefined) {
@@ -1329,6 +1434,7 @@ export class LofiEngine {
     this.kick.dispose();
     this.snare.dispose();
     this.hihat.dispose();
+    this.hihatFilter.dispose();
     this.vinyl.dispose();
     this.vinylDustGain.dispose();
     this.vinylDustFilter.dispose();

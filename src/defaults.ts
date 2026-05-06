@@ -1,4 +1,4 @@
-import type { EngineParams, InstrumentMix } from './engine/types';
+import type { EngineParams, InstrumentMix, InstrumentVolumes } from './engine/types';
 
 export const DEFAULT_MIX: InstrumentMix = {
   chord: true,
@@ -9,6 +9,17 @@ export const DEFAULT_MIX: InstrumentMix = {
   vinyl: true,
   melody: true,
   counter: true,
+};
+
+export const DEFAULT_INSTRUMENT_VOLUME: InstrumentVolumes = {
+  chord: 1,
+  bass: 1,
+  kick: 1,
+  snare: 1,
+  hihat: 1,
+  vinyl: 1,
+  melody: 1,
+  counter: 1,
 };
 
 export const DEFAULT_PARAMS: EngineParams = {
@@ -26,6 +37,7 @@ export const DEFAULT_PARAMS: EngineParams = {
   lowCut: 60,
   highCut: 8000,
   mix: DEFAULT_MIX,
+  instrumentVolume: DEFAULT_INSTRUMENT_VOLUME,
   octaveShift: 0,
   melodyOctave: 0,
   chordLength: 1.5,
