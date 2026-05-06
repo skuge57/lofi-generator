@@ -567,7 +567,25 @@ export class LofiEngine {
     this.cachedBassThreeQuarterStep = Math.floor((this.currentStepsPerBar * 3) / 4);
     this.cachedBassPickupStep = Math.max(0, this.currentStepsPerBar - 2);
     const melSemi = this.currentMelodyOctave * 12 + this.currentKeyShift;
-    this.cachedMelodyNotes = this.cachedProg.melodyNotes.map(n => this.transpose(n, melSemi));
+    const baseMelodyNotes = this.cachedProg.melodyNotes.map(n => this.transpose(n, melSemi));
+    const baseMelodyMidi = baseMelodyNotes.map(n => this.noteToMidi(n));
+    const targetMelodyMidi =
+      baseMelodyMidi.length > 0
+        ? baseMelodyMidi.reduce((sum, midi) => sum + midi, 0) / baseMelodyMidi.length
+        : 72 + this.currentMelodyOctave * 12 + this.currentKeyShift;
+    const melodyNoteSet = new Set(baseMelodyNotes);
+    this.cachedProg.chords.forEach((chord, i) => {
+      const harmonicNotes = [
+        ...chord.notes.map(n => this.transpose(n, this.currentKeyShift)),
+        this.cachedBassRoots[i],
+        this.cachedBassThirds[i],
+        this.cachedBassFifths[i],
+      ];
+      harmonicNotes.forEach(note => {
+        melodyNoteSet.add(this.noteNearMidi(note, targetMelodyMidi));
+      });
+    });
+    this.cachedMelodyNotes = [...melodyNoteSet];
     this.cachedMelodyFreqs = this.cachedMelodyNotes.map(n => Tone.Frequency(n).toFrequency());
 
     // Sort once per cache rebuild — the bar-loop just reads it.
@@ -576,11 +594,14 @@ export class LofiEngine {
 
     // For each chord, find which positions in the sorted pool are chord tones
     // (pitch class matches a chord pitch class). Used for resolution + counter.
-    const sortedPCs = this.cachedSortedMelodyIdx.map(idx =>
-      Tone.Frequency(this.cachedMelodyNotes[idx]).toMidi() % 12
-    );
-    this.cachedChordTonePos = this.cachedChordNotes.map(chord => {
-      const chordPCs = new Set(chord.map(n => Tone.Frequency(n).toMidi() % 12));
+    const sortedPCs = this.cachedSortedMelodyIdx.map(idx => this.pitchClass(this.cachedMelodyNotes[idx]));
+    this.cachedChordTonePos = this.cachedChordNotes.map((chord, i) => {
+      const chordPCs = new Set([
+        ...chord.map(n => this.pitchClass(n)),
+        this.pitchClass(this.cachedBassRoots[i]),
+        this.pitchClass(this.cachedBassThirds[i]),
+        this.pitchClass(this.cachedBassFifths[i]),
+      ]);
       const out: number[] = [];
       for (let p = 0; p < sortedPCs.length; p++) {
         if (chordPCs.has(sortedPCs[p])) out.push(p);
@@ -709,6 +730,21 @@ export class LofiEngine {
 
   private midiToNote(midi: number): string {
     return Tone.Frequency(midi, 'midi').toNote() as string;
+  }
+
+  private noteToMidi(note: string): number {
+    return Tone.Frequency(note).toMidi() as number;
+  }
+
+  private pitchClass(note: string): number {
+    return ((this.noteToMidi(note) % 12) + 12) % 12;
+  }
+
+  private noteNearMidi(note: string, targetMidi: number): string {
+    let midi = this.noteToMidi(note);
+    while (midi - targetMidi > 6) midi -= 12;
+    while (targetMidi - midi > 6) midi += 12;
+    return this.midiToNote(midi);
   }
 
   private chordMovementScore(candidate: number[], previous: number[] | null, baseCenter: number): number {
@@ -863,7 +899,7 @@ export class LofiEngine {
         const d = Math.abs(this.cachedMelodyFreqs[sorted[p]] - prevFreq);
         if (d < bestDist) { bestDist = d; best = p; }
       }
-      anchor = best;
+      anchor = this.nearestChordTonePos(best, chordTonePos);
     } else {
       anchor = chordTonePos[Math.floor(chordTonePos.length / 2)] ?? Math.floor(poolLen / 2);
     }
@@ -886,12 +922,13 @@ export class LofiEngine {
       if (step >= this.currentStepsPerBar) break;
 
       let pos = Math.max(0, Math.min(poolLen - 1, anchor + workingDeltas[i]));
-      // Tension/release: the closing note of the motif lands on a chord tone.
-      if (i === lastIdx) {
+      const dur = motif.durs[i];
+      // Tension/release: starts, longer notes, and strong pulses land on chord
+      // tones. Short inner notes may pass between them for a lo-fi/jazz lean.
+      if (i === 0 || i === lastIdx || dur !== '8n' || step % this.cachedBassQuarterStep === 0) {
         pos = this.nearestChordTonePos(pos, chordTonePos);
       }
 
-      const dur = motif.durs[i];
       const note = this.cachedMelodyNotes[sorted[pos]];
       this.melodyPatternBuf[step] = { note, dur };
 
