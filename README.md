@@ -63,6 +63,13 @@ Rough roadmap, no promises:
 
 ### Sound design
 - [ ] **Sample-based drums** — optional one-shot samples (kick, snare, hat) alongside the synthesized kit, for more authentic lo-fi grit
+- [ ] **Drum kit selector** — switch between synthesized drums and sample-based kits such as dusty vinyl, soft jazz, cassette, bitcrushed, and minimal click kits while keeping the same procedural groove engine
+- [ ] **Guitar articulation layer** — sampled guitar can add slides, grace notes, pick variation, muted plucks, soft string noise, and octave doubling for more organic phrases
+- [ ] **Cassette deck models** — choose tape flavors such as clean cassette, worn cassette, broken walkman, VHS, old radio, underwater, or phone speaker; each maps to wow/flutter, filtering, saturation, and noise
+- [ ] **Saturation / drive stage** — add tape warmth, soft clipping, speaker dirt, and optional per-instrument drive before the master limiter
+- [ ] **Vinyl scene presets** — layer procedural ambience such as dusty record, rainy window, cafe room, train ambience, distant street, fireplace, or late-night room tone
+- [ ] **Stereo width controls** — widen pads and texture while keeping kick, snare, and bass mono-safe, with a master mono-check button
+- [ ] **Auto-mix** — rebalance instrument levels and prevent clipping after randomizing aggressive settings
 - [x] **Tape wow & flutter** — slow pitch modulation on the master bus to emulate worn cassette
 - [x] **Sidechain ducking** — gentle pump on chords/bass triggered by the kick
 - [x] **Bitcrusher / sample-rate reduction** — optional lo-fi destruction on the master
@@ -71,6 +78,11 @@ Rough roadmap, no promises:
 
 ### Composition
 - [ ] **User-defined progressions** — let users build chord sequences from a roman-numeral picker
+- [ ] **Human feel macro** — one control adds timing drift, velocity variation, chord strum spread, bass looseness, ghost notes, and occasional lazy hits
+- [ ] **Section-aware pattern variation** — drum, bass, chord, and melody patterns subtly mutate between A, B, and bridge sections so the form feels more arranged
+- [ ] **Melody personalities** — choose between sparse, jazzy, pentatonic, guitar-like, vocal, or arpeggiated lead behavior
+- [ ] **Chord substitution intensity** — scale reharmonization from plain diatonic changes through extensions, secondary dominants, tritone substitutions, and altered chords
+- [ ] **Bass player personalities** — bass behavior can lean upright, synth sub, dubby, lazy guitarist, walking jazz, off-grid, or root-only minimalist
 - [x] **Song sections** — A / B / bridge structure with automatic arrangement (drops drums for 4 bars, brings them back with a snare-roll fill)
 - [x] **Energy curve** — evolve the track over the form instead of static playback: intro sparse; verse / A normal; B with more hats and melody; bridge filtered; return with fuller drums. Driven by a single **energy** value (0–100) that morphs density, filter, and pattern weights by section
 - [x] **Chord reharmonization** — optional flavor per progression: *diatonic*, *jazzy*, *darker*, *dreamy*, *spicy* — e.g. swap plain V for V13, tritone substitutions, or passing diminished chords while keeping the same Roman skeleton
@@ -81,6 +93,13 @@ Rough roadmap, no promises:
 - [x] **Time signatures beyond 4/4** — 6/8, 3/4, 5/4 patterns
 
 ### UX
+- [ ] **Simple / advanced mode** — expose play, randomize, mood, energy, key, and volume in simple mode while keeping deeper controls available in advanced mode
+- [ ] **Macro controls** — high-level knobs like warmth, dust, space, movement, complexity, darkness, and human feel control multiple underlying audio parameters
+- [ ] **Beat history** — keep recent randomized beats in a history stack with previous, favorite, copy URL, and restore actions
+- [ ] **Arrangement timeline** — show the current song section and bar position across intro, A, B, bridge, and return sections
+- [ ] **Text-to-vibe mapping** — convert short prompts like "sleepy rainy jazz cafe" into mood, BPM, progression, instrument, filter, and texture settings
+- [ ] **Study timer mode** — add focus/break timers with gentle musical transitions instead of harsh alarms
+- [ ] **Live performance controls** — trigger fills, drop drums, mute instruments, sweep filters, increase energy, or randomize selected parts during playback
 - [x] **Seeded generation + URL sharing** — a **seed** field and serialized URL settings reproduce/share the same beat, e.g. `/?seed=blue-cafe-4921&key=E&mood=sad`
 - [x] **Randomize** — one action generates a fresh full parameter set and seed
 - [x] **Per-instrument levels** — individual volume sliders for chords, bass, kick, snare, hi-hat, melody, counter-melody, and vinyl
@@ -93,7 +112,15 @@ Rough roadmap, no promises:
 - [ ] **More keyboard shortcuts** — `[` `]` to shift key, quick randomize, and focused transport/mix controls
 - [ ] **Visualizer upgrade** — animated waveform/spectrum, or a subtle scrolling piano roll
 
+### Export / presets
+- [ ] **Project file import/export** — save and load full beat settings as a portable `.lofi.json` file in addition to URL sharing
+- [ ] **Stem export** — render chords, bass, drums, melody, vinyl, and full mix as separate audio files
+- [ ] **Render-safe mode** — temporarily freeze live UI changes during offline export so rendered audio stays deterministic and glitch-free
+
 ### Engineering
 - [ ] **Tests for `musicTheory.ts`** — transpose, progression lookup, pattern shape
+- [ ] **Seed snapshot tests** — verify that the same seed and settings always produce the same progression, bass, melody, counter-melody, and serialized URL state
+- [ ] **Audio load meter** — hidden debug panel showing scheduler timing, active voices, cache rebuilds, and late events
+- [ ] **Engine API separation** — expose the lo-fi engine independently from React so playback, MIDI export, WAV rendering, and tests can share the same core logic
 - [ ] **Web Worker scheduler** — investigate moving sequence logic off the main thread (Tone.js already handles this internally, but worth profiling under load)
 - [ ] **Richer vinyl DSP** — custom noise / burst generator or worklet for deeper non-stationary crackle control
