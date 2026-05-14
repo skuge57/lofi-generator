@@ -1,11 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { LofiEngine } from './engine/lofiEngine';
+import { SceneEngine } from './engine/sceneEngine';
 import { Player } from './components/Player';
-import { LeftControls, RhythmControls, RightControls } from './components/Controls';
+import { LeftControls, RhythmControls, RightControls, SimpleControls } from './components/Controls';
 import { InstrumentToggles } from './components/InstrumentToggles';
 import { ProgressionPicker } from './components/ProgressionPicker';
 import { PROGRESSIONS } from './engine/musicTheory';
-import type { BassStyle, ChordVoice, EngineParams, Mood, ReharmFlavor, SectionInfo, TimeSignature } from './engine/types';
+import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, SceneId, SectionInfo, TimeSignature } from './engine/types';
 import { DEFAULT_PARAMS } from './defaults';
 import { parseParamsFromSearch, serializeParamsToSearch } from './urlState';
 import './App.css';
@@ -16,6 +17,7 @@ const MASTER_VOLUME_KEY_STEP = 0.05;
 const MOODS: Mood[] = ['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy'];
 const TIME_SIGNATURES: TimeSignature[] = ['4/4', '3/4', '5/4', '6/8'];
 const BASS_STYLES: BassStyle[] = ['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal'];
+const DRUM_KITS: DrumKit[] = ['synth', 'sample'];
 const CHORD_VOICES: ChordVoice[] = [
   'rhodes',
   'wurlitzer',
@@ -40,6 +42,7 @@ const INSTRUMENT_KEYS: (keyof EngineParams['mix'])[] = [
 
 type RandomizeLockKey = 'bpm' | 'chords' | 'drums' | 'bass' | 'melody' | 'toneMix';
 type RandomizeLocks = Record<RandomizeLockKey, boolean>;
+type ControlMode = 'simple' | 'advanced';
 
 const RANDOMIZE_LOCKS: { key: RandomizeLockKey; label: string }[] = [
   { key: 'bpm', label: 'BPM' },
@@ -146,6 +149,7 @@ function randomizeParams(current: EngineParams, locks: RandomizeLocks): EnginePa
     chordLength: randomStepped(0.6, 2.8, 0.1),
     chordTiming: randomStepped(0.05, 0.65, 0.05),
     swing: randomStepped(0, 0.45, 0.05),
+    drumKit: choice(DRUM_KITS),
     drumProb: {
       kick: randomStepped(0.7, 1, 0.05),
       snare: randomStepped(0.65, 1, 0.05),
@@ -179,6 +183,7 @@ function randomizeParams(current: EngineParams, locks: RandomizeLocks): EnginePa
     next.timeSignature = current.timeSignature;
     next.swing = current.swing;
     next.energy = current.energy;
+    next.drumKit = current.drumKit;
     next.drumProb = { ...current.drumProb };
   }
 
@@ -234,7 +239,21 @@ export default function App() {
   const [chordIndex, setChordIndex] = useState(0);
   const [sectionInfo, setSectionInfo] = useState<SectionInfo | null>(null);
   const [randomizeLocks, setRandomizeLocks] = useState<RandomizeLocks>(DEFAULT_RANDOMIZE_LOCKS);
+  const [controlMode, setControlMode] = useState<ControlMode>('simple');
+  const [sceneId, setSceneId] = useState<SceneId | null>(() => {
+    const q = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const s = q.get('scene');
+    const valid: SceneId[] = ['dusty-record', 'rainy-window', 'cafe', 'train', 'distant-street', 'fireplace', 'late-night'];
+    return s && valid.includes(s as SceneId) ? (s as SceneId) : null;
+  });
+  const [sceneVolume, setSceneVolume] = useState<number>(() => {
+    const q = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const v = q.get('scvol');
+    if (v !== null) { const n = Number(v); if (Number.isFinite(n)) return Math.max(0, Math.min(1, n)); }
+    return 0.5;
+  });
   const engineRef = useRef<LofiEngine | null>(null);
+  const sceneEngineRef = useRef<SceneEngine | null>(null);
   const rafRef = useRef<number>(0);
   const prevChordRef = useRef(-1);
   const prevSectionKeyRef = useRef('');
@@ -259,6 +278,8 @@ export default function App() {
       engineRef.current?.stop();
       engineRef.current?.dispose();
       engineRef.current = null;
+      sceneEngineRef.current?.dispose();
+      sceneEngineRef.current = null;
       cancelAnimationFrame(rafRef.current);
       prevChordRef.current = -1;
       prevSectionKeyRef.current = '';
@@ -268,10 +289,33 @@ export default function App() {
       const engine = new LofiEngine(params);
       engineRef.current = engine;
       await engine.start();
+      if (sceneId) {
+        const scene = new SceneEngine(sceneId, sceneVolume);
+        sceneEngineRef.current = scene;
+        scene.start();
+      }
       rafRef.current = requestAnimationFrame(trackStep);
       setPlaying(true);
     }
   };
+
+  const handleSceneChange = useCallback((newSceneId: SceneId | null) => {
+    setSceneId(newSceneId);
+    if (playing) {
+      sceneEngineRef.current?.dispose();
+      sceneEngineRef.current = null;
+      if (newSceneId) {
+        const scene = new SceneEngine(newSceneId, sceneVolume);
+        sceneEngineRef.current = scene;
+        scene.start();
+      }
+    }
+  }, [playing, sceneVolume]);
+
+  const handleSceneVolumeChange = useCallback((v: number) => {
+    setSceneVolume(v);
+    sceneEngineRef.current?.setVolume(v);
+  }, []);
 
   const handleParamChange = useCallback((update: Partial<EngineParams>) => {
     setParams(prev => {
@@ -306,6 +350,7 @@ export default function App() {
   useEffect(() => {
     return () => {
       engineRef.current?.dispose();
+      sceneEngineRef.current?.dispose();
       cancelAnimationFrame(rafRef.current);
     };
   }, []);
@@ -340,10 +385,15 @@ export default function App() {
       urlHydratedRef.current = true;
       return;
     }
-    const qs = serializeParamsToSearch(params);
+    const q = new URLSearchParams(serializeParamsToSearch(params));
+    if (sceneId) {
+      q.set('scene', sceneId);
+      if (sceneVolume !== 0.5) q.set('scvol', String(sceneVolume));
+    }
+    const qs = q.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, '', url);
-  }, [params]);
+  }, [params, sceneId, sceneVolume]);
 
   return (
     <div className="app">
@@ -351,9 +401,24 @@ export default function App() {
         <h1 className="title">lofi.</h1>
         <div className="header-actions">
           <div className="randomize-cluster">
-            <button type="button" className="randomize-btn" onClick={handleRandomize}>
-              Randomize
-            </button>
+            <div className="randomize-main-row">
+              <div className="mode-toggle" role="group" aria-label="Control mode">
+                {(['simple', 'advanced'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`mode-btn ${controlMode === mode ? 'active' : ''}`}
+                    aria-pressed={controlMode === mode}
+                    onClick={() => setControlMode(mode)}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="randomize-btn" onClick={handleRandomize}>
+                Randomize
+              </button>
+            </div>
             <div className="randomize-locks" aria-label="Randomize locks">
               <span className="randomize-locks-label">Locks</span>
               {RANDOMIZE_LOCKS.map(lock => (
@@ -374,36 +439,47 @@ export default function App() {
         </div>
       </div>
 
-      <div className="app-columns">
-        <div className="left-panel">
-          <LeftControls params={params} onChange={handleParamChange} />
-        </div>
+      {controlMode === 'simple' ? (
+        <SimpleControls params={params} onChange={handleParamChange} />
+      ) : (
+        <div className="app-columns">
+          <div className="left-panel">
+            <LeftControls
+              params={params}
+              onChange={handleParamChange}
+              sceneId={sceneId}
+              sceneVolume={sceneVolume}
+              onSceneChange={handleSceneChange}
+              onSceneVolumeChange={handleSceneVolumeChange}
+            />
+          </div>
 
-        <div className="middle-panel">
-          <ProgressionPicker
-            progressionId={params.progressionId}
-            reharmFlavor={params.reharmFlavor}
-            activeChordIndex={chordIndex}
-            playing={playing}
-            songForm={params.songForm}
-            keyShift={params.keyShift}
-            sectionInfo={sectionInfo}
-            onChange={id => handleParamChange({ progressionId: id })}
-            onReharmFlavorChange={reharmFlavor => handleParamChange({ reharmFlavor })}
-          />
-          <InstrumentToggles
-            mix={params.mix}
-            volume={params.instrumentVolume}
-            onMixChange={mix => handleParamChange({ mix })}
-            onVolumeChange={instrumentVolume => handleParamChange({ instrumentVolume })}
-          />
-          <RhythmControls params={params} onChange={handleParamChange} />
-        </div>
+          <div className="middle-panel">
+            <ProgressionPicker
+              progressionId={params.progressionId}
+              reharmFlavor={params.reharmFlavor}
+              activeChordIndex={chordIndex}
+              playing={playing}
+              songForm={params.songForm}
+              keyShift={params.keyShift}
+              sectionInfo={sectionInfo}
+              onChange={id => handleParamChange({ progressionId: id })}
+              onReharmFlavorChange={reharmFlavor => handleParamChange({ reharmFlavor })}
+            />
+            <RhythmControls params={params} onChange={handleParamChange} />
+          </div>
 
-        <div className="right-panel">
-          <RightControls params={params} onChange={handleParamChange} />
+          <div className="right-panel">
+            <InstrumentToggles
+              mix={params.mix}
+              volume={params.instrumentVolume}
+              onMixChange={mix => handleParamChange({ mix })}
+              onVolumeChange={instrumentVolume => handleParamChange({ instrumentVolume })}
+            />
+            <RightControls params={params} onChange={handleParamChange} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

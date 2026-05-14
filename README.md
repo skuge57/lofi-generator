@@ -16,6 +16,8 @@ Built with React 19, TypeScript, and Vite.
 - **Energy curve** — a single energy control shapes the song form by section, morphing drum density, hi-hat activity, melody activity, and filter brightness over the arrangement
 - **Per-instrument mix controls** — mute chords, bass, kick, snare, hi-hat, melody, counter-melody, or vinyl crackle independently, then trim each instrument from 0–150%
 - **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, sidechain ducking, drum hit probability, per-instrument volume, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
+- **Simple / advanced controls** — simple mode keeps playback focused on mood, energy, key, volume, randomize, and vibe macros while advanced mode exposes the full editor
+- **Vibe macros** — warmth, dust, space, movement, complexity, darkness, and human feel knobs move multiple detailed audio settings together
 - **Seeded sharing** — a seed field plus URL-serialized settings make beats reproducible and easy to share
 - **Lockable randomize** — generate a fresh parameter set from the header button while locking BPM, chords, drums, bass, melody, or tone / mix groups you want to keep
 - **Visual feedback** — current chord highlighted while the progression plays
@@ -55,19 +57,19 @@ The audio engine (`src/engine/lofiEngine.ts`) drives a `Tone.Sequence` at 16th n
 - Chord progressions and rhythm patterns live in `src/engine/musicTheory.ts`
 - The signal chain is: instruments → per-instrument gates → highpass → lowpass → tape wow/flutter → bitcrusher → limiter → master volume → output, with reverb fed in parallel as a send.
 - The chord pad can switch between Rhodes/Wurli-style keys, sampled muted guitar, vibes, tape choir, synth strings, organ, and glassy FM tones; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, filtered NoiseSynth hat); vinyl texture layers filtered pink-noise dust with intermittent clicks, low pops, and brief dropouts
-- `src/urlState.ts` serializes most controls into the URL, including seed, mood, key, progression, reharmonization, voice, time signature, bass style, arrangement, mutes, per-instrument volumes, and tone settings
+- `src/urlState.ts` serializes most controls into the URL, including seed, mood, key, progression, reharmonization, voice, time signature, bass style, arrangement, mutes, per-instrument volumes, and tone settings. Macro controls write into those same detailed settings, so shared links reproduce the resulting beat.
 
 ## Future plans
 
 Rough roadmap, no promises:
 
 ### Sound design
-- [ ] **Sample-based drums** — optional one-shot samples (kick, snare, hat) alongside the synthesized kit, for more authentic lo-fi grit
+- [x] **Sample-based drums** — optional one-shot samples (kick, snare, hat) alongside the synthesized kit, for more authentic lo-fi grit
 - [ ] **Drum kit selector** — switch between synthesized drums and sample-based kits such as dusty vinyl, soft jazz, cassette, bitcrushed, and minimal click kits while keeping the same procedural groove engine
 - [ ] **Guitar articulation layer** — sampled guitar can add slides, grace notes, pick variation, muted plucks, soft string noise, and octave doubling for more organic phrases
 - [ ] **Cassette deck models** — choose tape flavors such as clean cassette, worn cassette, broken walkman, VHS, old radio, underwater, or phone speaker; each maps to wow/flutter, filtering, saturation, and noise
 - [ ] **Saturation / drive stage** — add tape warmth, soft clipping, speaker dirt, and optional per-instrument drive before the master limiter
-- [ ] **Vinyl scene presets** — layer procedural ambience such as dusty record, rainy window, cafe room, train ambience, distant street, fireplace, or late-night room tone
+- [x] **Vinyl scene presets** — layer procedural ambience such as dusty record, rainy window, cafe room, train ambience, distant street, fireplace, or late-night room tone
 - [ ] **Stereo width controls** — widen pads and texture while keeping kick, snare, and bass mono-safe, with a master mono-check button
 - [x] **Auto-mix** — rebalance instrument levels and prevent clipping after randomizing aggressive settings
 - [x] **Tape wow & flutter** — slow pitch modulation on the master bus to emulate worn cassette
@@ -93,8 +95,8 @@ Rough roadmap, no promises:
 - [x] **Time signatures beyond 4/4** — 6/8, 3/4, 5/4 patterns
 
 ### UX
-- [ ] **Simple / advanced mode** — expose play, randomize, mood, energy, key, and volume in simple mode while keeping deeper controls available in advanced mode
-- [ ] **Macro controls** — high-level knobs like warmth, dust, space, movement, complexity, darkness, and human feel control multiple underlying audio parameters
+- [x] **Simple / advanced mode** — expose play, randomize, mood, energy, key, and volume in simple mode while keeping deeper controls available in advanced mode
+- [x] **Macro controls** — high-level knobs like warmth, dust, space, movement, complexity, darkness, and human feel control multiple underlying audio parameters
 - [ ] **Beat history** — keep recent randomized beats in a history stack with previous, favorite, copy URL, and restore actions
 - [ ] **Arrangement timeline** — show the current song section and bar position across intro, A, B, bridge, and return sections
 - [ ] **Text-to-vibe mapping** — convert short prompts like "sleepy rainy jazz cafe" into mood, BPM, progression, instrument, filter, and texture settings

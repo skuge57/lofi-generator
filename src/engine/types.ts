@@ -1,6 +1,15 @@
 export type Mood = 'chill' | 'sad' | 'jazzy' | 'dreamy' | 'rainy' | 'dusty' | 'upbeat' | 'sleepy';
+export type SceneId =
+  | 'dusty-record'
+  | 'rainy-window'
+  | 'cafe'
+  | 'train'
+  | 'distant-street'
+  | 'fireplace'
+  | 'late-night';
 export type TimeSignature = '4/4' | '3/4' | '5/4' | '6/8';
 export type BassStyle = 'simple' | 'walking' | 'lazy' | 'bounce' | 'dub' | 'pedal';
+export type DrumKit = 'synth' | 'sample';
 export type ReharmFlavor = 'diatonic' | 'jazzy' | 'darker' | 'dreamy' | 'spicy';
 export type ChordVoice =
   | 'rhodes'
@@ -48,6 +57,7 @@ export interface EngineParams {
   chordTiming: number;
   sidechainDucking: boolean;
   swing: number;
+  drumKit: DrumKit;
   melodyOctave: number;
   drumProb: { kick: number; snare: number; hihat: number };
   keyShift: number;

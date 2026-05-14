@@ -44,6 +44,7 @@ export const DEFAULT_PARAMS: EngineParams = {
   chordTiming: 0.3,
   sidechainDucking: true,
   swing: 0,
+  drumKit: 'synth',
   drumProb: { kick: 1, snare: 1, hihat: 1 },
   keyShift: 0,
   bassStyle: 'simple',

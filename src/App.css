@@ -36,11 +36,53 @@ body {
   gap: 14px;
 }
 
+.mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(76px, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #3a3028;
+  border-radius: 8px;
+  background: #1a1612;
+}
+
+.mode-btn {
+  height: 32px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #6a5a4a;
+  font-family: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-btn:hover {
+  color: #c8a87a;
+}
+
+.mode-btn.active {
+  background: #c8a87a1c;
+  color: #e0c090;
+}
+
 .randomize-cluster {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
+}
+
+.randomize-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
 }
 
 .randomize-locks {
@@ -188,10 +230,68 @@ body {
   padding-top: 4px;
 }
 
+.simple-panel {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.1fr);
+  gap: 30px;
+  align-items: start;
+}
+
+.simple-controls,
+.macro-controls {
+  min-width: 0;
+}
+
+.macro-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  width: 100%;
+}
+
+.macro-row {
+  display: grid;
+  grid-template-columns: minmax(104px, 0.74fr) minmax(110px, 1fr) 34px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: #8a7060;
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.macro-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.macro-val {
+  color: #c8a87a;
+  font-size: 0.72rem;
+  text-align: right;
+}
+
 .mood-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.scene-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.scene-btn {
+  flex: none;
+  width: 100%;
+  padding: 7px 2px;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
 }
 
 .bass-style-grid {
@@ -208,8 +308,16 @@ body {
   width: 100%;
 }
 
+.drum-kit-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
 .bass-style-grid .bass-style-btn,
-.chord-voice-grid .chord-voice-btn {
+.chord-voice-grid .chord-voice-btn,
+.drum-kit-row .drum-kit-btn {
   flex: none;
   width: 100%;
   padding: 7px 2px;
@@ -698,13 +806,13 @@ input[type='range']::-moz-range-thumb {
 
 .instrument-volume-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 12px;
+  grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+  gap: 8px 14px;
 }
 
 .instrument-volume-row {
   display: grid;
-  grid-template-columns: 58px minmax(70px, 1fr) 34px;
+  grid-template-columns: 64px minmax(86px, 1fr) 38px;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -712,6 +820,13 @@ input[type='range']::-moz-range-thumb {
   font-size: 0.68rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.instrument-volume-row > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .instrument-volume-row input[type='range'] {
@@ -768,23 +883,21 @@ input[type='range']::-moz-range-thumb {
     grid-template-columns: minmax(260px, 0.85fr) minmax(360px, 1.15fr);
   }
 
+  .simple-panel {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
   .right-panel {
     grid-column: 1 / -1;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 28px;
+    row-gap: 20px;
     padding-left: 0;
     padding-top: 20px;
     border-left: 0;
     border-top: 1px solid #2e2820;
-  }
-
-  .right-panel .controls {
-    display: contents;
-  }
-
-  .right-panel .controls > * {
-    min-width: 0;
   }
 }
 
@@ -797,6 +910,7 @@ input[type='range']::-moz-range-thumb {
 
   .app-header {
     align-items: flex-end;
+    flex-wrap: wrap;
   }
 
   .title {
@@ -806,6 +920,17 @@ input[type='range']::-moz-range-thumb {
   .header-actions {
     align-items: flex-end;
     gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .mode-toggle {
+    grid-template-columns: repeat(2, minmax(66px, 1fr));
+  }
+
+  .mode-btn {
+    height: 30px;
+    font-size: 0.61rem;
   }
 
   .randomize-locks {
@@ -861,5 +986,10 @@ input[type='range']::-moz-range-thumb {
   .slider-row {
     grid-template-columns: minmax(82px, 0.58fr) minmax(84px, 1fr) 42px;
     gap: 10px;
+  }
+
+  .macro-row {
+    grid-template-columns: minmax(92px, 0.62fr) minmax(84px, 1fr) 32px;
+    gap: 9px;
   }
 }

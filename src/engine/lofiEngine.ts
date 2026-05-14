@@ -1,7 +1,7 @@
 import * as Tone from 'tone';
 import { createRng } from './rng';
 import { getReharmonizedProgression, getPattern, SONG_ARRANGEMENT, locateSection } from './musicTheory';
-import type { BassStyle, ChordVoice, EngineParams, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SectionInfo, InstrumentMix, TimeSignature } from './types';
+import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SectionInfo, InstrumentMix, TimeSignature } from './types';
 
 function cloneEngineParams(p: EngineParams): EngineParams {
   return {
@@ -49,6 +49,9 @@ export class LofiEngine {
   private snare: Tone.NoiseSynth;
   private hihat: Tone.NoiseSynth;
   private hihatFilter: Tone.Filter;
+  private sampleKick: Tone.Sampler;
+  private sampleSnare: Tone.Sampler;
+  private sampleHihat: Tone.Sampler;
   private vinyl: Tone.Noise;
   private vinylGain: Tone.Gain;
   private vinylDustGain: Tone.Gain;
@@ -83,6 +86,7 @@ export class LofiEngine {
   private currentChordLength = 1.5;
   private currentChordTiming = 0;
   private currentSidechainDucking = true;
+  private currentDrumKit: DrumKit = 'synth';
   private currentDrumProb = { kick: 1, snare: 1, hihat: 1 };
   private currentKeyShift = 0;
   private currentBassStyle: BassStyle = 'simple';
@@ -117,6 +121,9 @@ export class LofiEngine {
   private cachedBassFifths!: string[];
   private cachedBassOctaves!: string[];
   private cachedBassApproach!: string[];
+  private cachedKickSteps: number[] = [];
+  private cachedSnareSteps: number[] = [];
+  private cachedHihatSteps: number[] = [];
   private cachedBassQuarterStep = 4;
   private cachedBassHalfStep = 8;
   private cachedBassThreeQuarterStep = 12;
@@ -139,6 +146,11 @@ export class LofiEngine {
   // Counter-melody buffer: a soft harmony/answer line below the lead,
   // populated sparsely so it supports the hook instead of competing with it.
   private counterPatternBuf: ({ note: string; dur: MelodyDur } | null)[] = new Array(DEFAULT_STEPS_PER_BAR).fill(null);
+  private kickMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
+  private snareMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
+  private hihatMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
+  private fillSnareMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
+  private fillKickMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
   private prevMelodyNote: string | null = null;
 
   // Theme state — a call/answer phrase spanning the full chord progression.
@@ -166,6 +178,7 @@ export class LofiEngine {
     this.currentChordLength = params.chordLength;
     this.currentChordTiming = params.chordTiming;
     this.currentSidechainDucking = params.sidechainDucking;
+    this.currentDrumKit = params.drumKit;
     this.currentDrumProb = { ...params.drumProb };
     this.currentKeyShift = params.keyShift;
     this.currentBassStyle = params.bassStyle;
@@ -324,6 +337,28 @@ export class LofiEngine {
       envelope: { attack: 0.001, decay: 0.045, sustain: 0, release: 0.018 },
       volume: -15,
     }).connect(this.hihatFilter);
+
+    this.sampleKick = new Tone.Sampler({
+      urls: { C1: 'soundreality-kick-drum-acoustic-sample-455285.mp3' },
+      baseUrl: `${import.meta.env.BASE_URL}samples/drums/`,
+      attack: 0.001,
+      release: 0.08,
+      volume: -7,
+    }).connect(this.gates.kick);
+    this.sampleSnare = new Tone.Sampler({
+      urls: { C1: '11325622-tr707-snare-drum-241412.mp3' },
+      baseUrl: `${import.meta.env.BASE_URL}samples/drums/`,
+      attack: 0.001,
+      release: 0.06,
+      volume: -10,
+    }).connect(this.gates.snare);
+    this.sampleHihat = new Tone.Sampler({
+      urls: { C1: 'soundreality-hi-hat-closed-acoustic-sample-455286.mp3' },
+      baseUrl: `${import.meta.env.BASE_URL}samples/drums/`,
+      attack: 0.001,
+      release: 0.025,
+      volume: -12,
+    }).connect(this.gates.hihat);
 
     // Vinyl texture: steady filtered bed plus transient clicks and low pops.
     this.vinylGain = this.gates.vinyl;
@@ -559,6 +594,9 @@ export class LofiEngine {
     this.cachedPattern = getPattern(this.currentMood, this.currentTimeSignature);
     this.currentStepsPerBar = this.cachedPattern.stepsPerBar;
     this.ensurePatternBuffers();
+    this.cachedKickSteps = this.stepsFromPattern(this.cachedPattern.kick);
+    this.cachedSnareSteps = this.stepsFromPattern(this.cachedPattern.snare);
+    this.cachedHihatSteps = this.stepsFromPattern(this.cachedPattern.hihat);
     this.cachedChordStepSet = new Set(this.cachedPattern.chordSteps);
     this.cachedBassStepToInterval = new Map(
       this.cachedPattern.bassSteps.map(b => [b.step, b.interval])
@@ -636,6 +674,19 @@ export class LofiEngine {
     if (this.melodyPatternBuf.length === this.currentStepsPerBar) return;
     this.melodyPatternBuf = new Array(this.currentStepsPerBar).fill(null);
     this.counterPatternBuf = new Array(this.currentStepsPerBar).fill(null);
+    this.kickMask = new Array(this.currentStepsPerBar).fill(false);
+    this.snareMask = new Array(this.currentStepsPerBar).fill(false);
+    this.hihatMask = new Array(this.currentStepsPerBar).fill(false);
+    this.fillSnareMask = new Array(this.currentStepsPerBar).fill(false);
+    this.fillKickMask = new Array(this.currentStepsPerBar).fill(false);
+  }
+
+  private stepsFromPattern(pattern: boolean[]): number[] {
+    const steps: number[] = [];
+    for (let step = 0; step < pattern.length; step++) {
+      if (pattern[step]) steps.push(step);
+    }
+    return steps;
   }
 
   private scheduleSequence(): Tone.Sequence<number> {
@@ -675,6 +726,120 @@ export class LofiEngine {
     this.bassSidechain.gain.cancelAndHoldAtTime(time);
     this.bassSidechain.gain.linearRampToValueAtTime(bassFloor, attackAt);
     this.bassSidechain.gain.exponentialRampToValueAtTime(1, releaseAt);
+  }
+
+  private triggerKick(time: number, duration: Tone.Unit.Time = '8n', velocity = 1): void {
+    if (this.currentDrumKit === 'sample' && this.sampleKick.loaded) {
+      this.sampleKick.triggerAttackRelease('C1', duration, time, velocity);
+      return;
+    }
+    this.kick.triggerAttackRelease('C1', duration, time, velocity);
+  }
+
+  private triggerSnare(time: number, duration: Tone.Unit.Time = '8n', velocity = 1): void {
+    if (this.currentDrumKit === 'sample' && this.sampleSnare.loaded) {
+      this.sampleSnare.triggerAttackRelease('C1', duration, time, velocity);
+      return;
+    }
+    this.snare.triggerAttackRelease(duration, time, velocity);
+  }
+
+  private triggerHihat(time: number, duration: Tone.Unit.Time = '32n', velocity = 1): void {
+    if (this.currentDrumKit === 'sample' && this.sampleHihat.loaded) {
+      this.sampleHihat.triggerAttackRelease('C1', duration, time, velocity);
+      return;
+    }
+    this.hihat.triggerAttackRelease(duration, time, velocity);
+  }
+
+  private drumChance(probability: number, sectionScale: number): number {
+    return clamp(probability, 0, 1) * clamp(sectionScale, 0, 1);
+  }
+
+  private clearDrumMask(mask: boolean[]): void {
+    for (let step = 0; step < mask.length; step++) {
+      mask[step] = false;
+    }
+  }
+
+  private hitsForDensity(available: number, density: number): number {
+    const expected = available * density;
+    const wholeHits = Math.floor(expected);
+    return clamp(wholeHits + (this.rnd() < expected - wholeHits ? 1 : 0), 0, available);
+  }
+
+  private chooseDrumSteps(steps: number[], chance: number, mask: boolean[]): void {
+    this.clearDrumMask(mask);
+    const density = clamp(chance, 0, 1);
+    const available = steps.length;
+    if (density <= 0 || available === 0) return;
+    if (density >= 1) {
+      for (let i = 0; i < available; i++) mask[steps[i]] = true;
+      return;
+    }
+
+    const hitsToPlay = this.hitsForDensity(available, density);
+    const phase = this.rnd();
+    for (let i = 0; i < hitsToPlay; i++) {
+      const idx = Math.min(available - 1, Math.floor(((i + phase) * available) / hitsToPlay));
+      mask[steps[idx]] = true;
+    }
+  }
+
+  private chooseDrumRange(startStep: number, endStep: number, chance: number, mask: boolean[]): void {
+    this.clearDrumMask(mask);
+    const density = clamp(chance, 0, 1);
+    const start = clamp(Math.floor(startStep), 0, this.currentStepsPerBar);
+    const end = clamp(Math.floor(endStep), start, this.currentStepsPerBar);
+    const available = end - start;
+    if (density <= 0 || available === 0) return;
+    if (density >= 1) {
+      for (let step = start; step < end; step++) mask[step] = true;
+      return;
+    }
+
+    const hitsToPlay = this.hitsForDensity(available, density);
+    const phase = this.rnd();
+    for (let i = 0; i < hitsToPlay; i++) {
+      const offset = Math.min(available - 1, Math.floor(((i + phase) * available) / hitsToPlay));
+      mask[start + offset] = true;
+    }
+  }
+
+  private refreshDrumMasks(): void {
+    this.chooseDrumSteps(
+      this.cachedKickSteps,
+      this.drumChance(this.currentDrumProb.kick, this.activeKickScale),
+      this.kickMask
+    );
+    this.chooseDrumSteps(
+      this.cachedSnareSteps,
+      this.drumChance(this.currentDrumProb.snare, this.activeSnareScale),
+      this.snareMask
+    );
+    this.chooseDrumSteps(
+      this.cachedHihatSteps,
+      this.drumChance(this.currentDrumProb.hihat, this.activeHihatScale),
+      this.hihatMask
+    );
+
+    if (this.isFillBar) {
+      this.chooseDrumRange(
+        this.cachedPattern.fillStartStep,
+        this.currentStepsPerBar,
+        this.drumChance(this.currentDrumProb.snare, this.activeSnareScale),
+        this.fillSnareMask
+      );
+      this.chooseDrumRange(
+        this.cachedPattern.fillStartStep,
+        this.cachedPattern.fillStartStep + 1,
+        this.drumChance(this.currentDrumProb.kick, this.activeKickScale),
+        this.fillKickMask
+      );
+    } else {
+      this.clearDrumMask(this.fillSnareMask);
+      this.clearDrumMask(this.fillKickMask);
+    }
   }
 
   private resetSidechain(time = Tone.now(), rampTime = 0.04): void {
@@ -754,6 +919,7 @@ export class LofiEngine {
     this.currentBar = 0;
     this.updateSection();
     this.applyEffectiveMix();
+    this.refreshDrumMasks();
   }
 
   private updateSection(): void {
@@ -1111,31 +1277,33 @@ export class LofiEngine {
           this.applyEffectiveMix();
         }
       }
+      this.refreshDrumMasks();
     }
 
     const shiftedNotes = this.cachedChordNotes[this.chordIndex];
 
-    if (this.activeMix.kick && this.cachedPattern.kick[step] && this.rnd() < this.currentDrumProb.kick * this.activeKickScale) {
-      this.kick.triggerAttackRelease('C1', '8n', time);
+    if (this.activeMix.kick && this.kickMask[step]) {
+      this.triggerKick(time);
       this.triggerSidechain(time);
     }
 
-    if (this.activeMix.snare && this.cachedPattern.snare[step] && this.rnd() < this.currentDrumProb.snare * this.activeSnareScale) {
-      this.snare.triggerAttackRelease('8n', time);
+    if (this.activeMix.snare && this.snareMask[step]) {
+      this.triggerSnare(time);
     }
 
-    if (this.activeMix.hihat && this.cachedPattern.hihat[step] && this.rnd() < this.currentDrumProb.hihat * this.activeHihatScale) {
-      this.hihat.triggerAttackRelease('32n', time, 0.5 + this.activeEnergy * 0.18 + this.rnd() * 0.12);
+    if (this.activeMix.hihat && this.hihatMask[step]) {
+      this.triggerHihat(time, '32n', 0.5 + this.activeEnergy * 0.18 + this.rnd() * 0.12);
     }
 
     // Snare-roll fill on the last beat group of a fill bar, telegraphing the next section.
-    if (this.activeMix.snare && this.isFillBar && step >= this.cachedPattern.fillStartStep) {
+    if (this.activeMix.snare && this.fillSnareMask[step]) {
       const vel = 0.32 + (step - this.cachedPattern.fillStartStep) * 0.16;
-      this.snare.triggerAttackRelease('16n', time, vel);
-      if (this.activeMix.kick && step === this.cachedPattern.fillStartStep) {
-        this.kick.triggerAttackRelease('C1', '16n', time, 0.6);
-        this.triggerSidechain(time, 0.75);
-      }
+      this.triggerSnare(time, '16n', vel);
+    }
+
+    if (this.activeMix.kick && this.fillKickMask[step]) {
+      this.triggerKick(time, '16n', 0.6);
+      this.triggerSidechain(time, 0.75);
     }
 
     if (this.activeMix.chord && this.cachedChordStepSet.has(step)) {
@@ -1315,12 +1483,17 @@ export class LofiEngine {
       Tone.getTransport().swingSubdivision = '16n';
       Tone.getTransport().swing = clamp(params.swing, 0, 1);
     }
+    if (params.drumKit !== undefined) {
+      this.currentDrumKit = params.drumKit;
+    }
     if (params.drumProb !== undefined) {
       this.currentDrumProb = { ...params.drumProb };
+      this.refreshDrumMasks();
     }
     if (params.energy !== undefined) {
       this.currentEnergy = params.energy;
       this.updateEnergyShaping();
+      this.refreshDrumMasks();
     }
     if (params.masterVolume !== undefined) {
       this.masterVolume.gain.rampTo(clamp(params.masterVolume, 0, 2), 0.05);
@@ -1368,6 +1541,7 @@ export class LofiEngine {
       this.updateSection();
       this.updateEnergyShaping();
       this.applyEffectiveMix();
+      this.refreshDrumMasks();
     }
 
     if (needsRebuild) {
@@ -1380,6 +1554,7 @@ export class LofiEngine {
         this.chordIndex = this.cachedProg.chords.length - 1;
       }
       this.generateMelodyPattern();
+      this.refreshDrumMasks();
       const mustRestart =
         this.sequence !== null &&
         (needsSequenceRestart || stepsBefore !== this.currentStepsPerBar || this.seededMode);
@@ -1388,7 +1563,7 @@ export class LofiEngine {
         const seq = this.sequence;
         if (seq) {
           Tone.getTransport().stop();
-          seq.stop();
+          seq.stop(0);
           seq.dispose();
           this.scheduleSequence().start(0);
           Tone.getTransport().start();
@@ -1437,6 +1612,9 @@ export class LofiEngine {
     this.snare.dispose();
     this.hihat.dispose();
     this.hihatFilter.dispose();
+    this.sampleKick.dispose();
+    this.sampleSnare.dispose();
+    this.sampleHihat.dispose();
     this.vinyl.dispose();
     this.vinylDustGain.dispose();
     this.vinylDustFilter.dispose();

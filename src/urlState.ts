@@ -1,5 +1,5 @@
 import { DEFAULT_PARAMS } from './defaults';
-import type { BassStyle, ChordVoice, EngineParams, Mood, ReharmFlavor, TimeSignature } from './engine/types';
+import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, TimeSignature } from './engine/types';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
@@ -18,6 +18,7 @@ const TIME_SIG_DECODE: Record<string, TimeSignature> = {
 
 const MOODS = new Set<Mood>(['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy']);
 const BASS = new Set<BassStyle>(['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal']);
+const DRUM_KITS = new Set<DrumKit>(['synth', 'sample']);
 const CHORD_VOICES = new Set<ChordVoice>([
   'rhodes',
   'wurlitzer',
@@ -155,6 +156,10 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
     if (Number.isFinite(n)) out.swing = Math.max(0, Math.min(1, n));
   }
 
+  const drumKit = q.get('drumKit') ?? q.get('kit');
+  if (drumKit === 'samples') out.drumKit = 'sample';
+  if (drumKit && DRUM_KITS.has(drumKit as DrumKit)) out.drumKit = drumKit as DrumKit;
+
   const dk = q.get('dk') ?? q.get('drumKick');
   const ds = q.get('ds') ?? q.get('drumSnare');
   const dh = q.get('dh') ?? q.get('drumHihat');
@@ -254,6 +259,7 @@ export function serializeParamsToSearch(params: EngineParams): string {
   if (!numEq(params.chordTiming, d.chordTiming)) q.set('ctime', String(params.chordTiming));
   if (params.sidechainDucking !== d.sidechainDucking) q.set('sc', params.sidechainDucking ? '1' : '0');
   if (!numEq(params.swing, d.swing)) q.set('sw', String(params.swing));
+  if (params.drumKit !== d.drumKit) q.set('kit', params.drumKit);
   if (
     !numEq(params.drumProb.kick, d.drumProb.kick) ||
     !numEq(params.drumProb.snare, d.drumProb.snare) ||
