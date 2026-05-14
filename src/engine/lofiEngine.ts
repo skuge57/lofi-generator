@@ -1,5 +1,6 @@
 import * as Tone from 'tone';
 import { createRng } from './rng';
+import { createDrumFillPlan } from './drumFills';
 import { getReharmonizedProgression, getPattern, SONG_ARRANGEMENT, locateSection } from './musicTheory';
 import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SectionInfo, InstrumentMix, TimeSignature } from './types';
 
@@ -89,7 +90,7 @@ export class LofiEngine {
   private currentDrumKit: DrumKit = 'synth';
   private currentDrumProb = { kick: 1, snare: 1, hihat: 1 };
   private currentKeyShift = 0;
-  private currentBassStyle: BassStyle = 'simple';
+  private currentBassStyle: BassStyle = 'root-only';
   private currentTimeSignature: TimeSignature = '4/4';
   private currentEnergy = 70;
   private currentStepsPerBar = DEFAULT_STEPS_PER_BAR;
@@ -102,6 +103,8 @@ export class LofiEngine {
   private sectionIdx = 0;
   private barInSection = 0;
   private isFillBar = false;
+  private manualFillActive = false;
+  private manualFillPending = false;
   private activeEnergy = 0.7;
   private activeKickScale = 1;
   private activeSnareScale = 1;
@@ -120,6 +123,8 @@ export class LofiEngine {
   private cachedBassThirds!: string[];
   private cachedBassFifths!: string[];
   private cachedBassOctaves!: string[];
+  private cachedBassSubs!: string[];
+  private cachedBassTenths!: string[];
   private cachedBassApproach!: string[];
   private cachedKickSteps: number[] = [];
   private cachedSnareSteps: number[] = [];
@@ -149,8 +154,9 @@ export class LofiEngine {
   private kickMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
   private snareMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
   private hihatMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
-  private fillSnareMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
-  private fillKickMask: boolean[] = new Array(DEFAULT_STEPS_PER_BAR).fill(false);
+  private fillKickVel: number[] = new Array(DEFAULT_STEPS_PER_BAR).fill(0);
+  private fillSnareVel: number[] = new Array(DEFAULT_STEPS_PER_BAR).fill(0);
+  private fillHihatVel: number[] = new Array(DEFAULT_STEPS_PER_BAR).fill(0);
   private prevMelodyNote: string | null = null;
 
   // Theme state — a call/answer phrase spanning the full chord progression.
@@ -619,6 +625,8 @@ export class LofiEngine {
     this.cachedBassThirds = this.cachedProg.bassThirds.map(n => this.transpose(n, this.currentKeyShift));
     this.cachedBassFifths = this.cachedProg.bassFifths.map(n => this.transpose(n, this.currentKeyShift));
     this.cachedBassOctaves = this.cachedProg.bassRoots.map(n => this.transpose(n, this.currentKeyShift + 12));
+    this.cachedBassSubs = this.cachedProg.bassRoots.map(n => this.transpose(n, this.currentKeyShift - 12));
+    this.cachedBassTenths = this.cachedProg.bassThirds.map(n => this.transpose(n, this.currentKeyShift + 12));
     // Approach note = 1 semitone below each chord's (already key-shifted) root
     this.cachedBassApproach = this.cachedBassRoots.map(n => this.transpose(n, -1));
     this.cachedBassQuarterStep = Math.floor(this.currentStepsPerBar / 4);
@@ -677,8 +685,9 @@ export class LofiEngine {
     this.kickMask = new Array(this.currentStepsPerBar).fill(false);
     this.snareMask = new Array(this.currentStepsPerBar).fill(false);
     this.hihatMask = new Array(this.currentStepsPerBar).fill(false);
-    this.fillSnareMask = new Array(this.currentStepsPerBar).fill(false);
-    this.fillKickMask = new Array(this.currentStepsPerBar).fill(false);
+    this.fillKickVel = new Array(this.currentStepsPerBar).fill(0);
+    this.fillSnareVel = new Array(this.currentStepsPerBar).fill(0);
+    this.fillHihatVel = new Array(this.currentStepsPerBar).fill(0);
   }
 
   private stepsFromPattern(pattern: boolean[]): number[] {
@@ -786,23 +795,36 @@ export class LofiEngine {
     }
   }
 
-  private chooseDrumRange(startStep: number, endStep: number, chance: number, mask: boolean[]): void {
-    this.clearDrumMask(mask);
-    const density = clamp(chance, 0, 1);
-    const start = clamp(Math.floor(startStep), 0, this.currentStepsPerBar);
-    const end = clamp(Math.floor(endStep), start, this.currentStepsPerBar);
-    const available = end - start;
-    if (density <= 0 || available === 0) return;
-    if (density >= 1) {
-      for (let step = start; step < end; step++) mask[step] = true;
-      return;
+  private clearDrumVelocity(buffer: number[]): void {
+    for (let step = 0; step < buffer.length; step++) {
+      buffer[step] = 0;
     }
+  }
 
-    const hitsToPlay = this.hitsForDensity(available, density);
-    const phase = this.rnd();
-    for (let i = 0; i < hitsToPlay; i++) {
-      const offset = Math.min(available - 1, Math.floor(((i + phase) * available) / hitsToPlay));
-      mask[start + offset] = true;
+  private drumFillActive(): boolean {
+    return this.isFillBar || this.manualFillActive;
+  }
+
+  private refreshDrumFillBuffers(): void {
+    this.clearDrumVelocity(this.fillKickVel);
+    this.clearDrumVelocity(this.fillSnareVel);
+    this.clearDrumVelocity(this.fillHihatVel);
+    if (!this.drumFillActive()) return;
+
+    const plan = createDrumFillPlan({
+      stepsPerBar: this.currentStepsPerBar,
+      fillStartStep: this.cachedPattern.fillStartStep,
+      energy: this.activeEnergy,
+      kickChance: this.drumChance(this.currentDrumProb.kick, this.activeKickScale),
+      snareChance: this.drumChance(this.currentDrumProb.snare, this.activeSnareScale),
+      hihatChance: this.drumChance(this.currentDrumProb.hihat, this.activeHihatScale),
+      rnd: this.rnd,
+    });
+
+    for (let step = 0; step < this.currentStepsPerBar; step++) {
+      this.fillKickVel[step] = plan.kick[step] ?? 0;
+      this.fillSnareVel[step] = plan.snare[step] ?? 0;
+      this.fillHihatVel[step] = plan.hihat[step] ?? 0;
     }
   }
 
@@ -823,23 +845,7 @@ export class LofiEngine {
       this.hihatMask
     );
 
-    if (this.isFillBar) {
-      this.chooseDrumRange(
-        this.cachedPattern.fillStartStep,
-        this.currentStepsPerBar,
-        this.drumChance(this.currentDrumProb.snare, this.activeSnareScale),
-        this.fillSnareMask
-      );
-      this.chooseDrumRange(
-        this.cachedPattern.fillStartStep,
-        this.cachedPattern.fillStartStep + 1,
-        this.drumChance(this.currentDrumProb.kick, this.activeKickScale),
-        this.fillKickMask
-      );
-    } else {
-      this.clearDrumMask(this.fillSnareMask);
-      this.clearDrumMask(this.fillKickMask);
-    }
+    this.refreshDrumFillBuffers();
   }
 
   private resetSidechain(time = Tone.now(), rampTime = 0.04): void {
@@ -895,7 +901,7 @@ export class LofiEngine {
   private effectiveMix(): InstrumentMix {
     if (!this.songFormEnabled) return this._mix;
     const sec = SONG_ARRANGEMENT[this.sectionIdx];
-    if (!sec.mutes || sec.mutes.length === 0 || this.isFillBar) return this._mix;
+    if (!sec.mutes || sec.mutes.length === 0 || this.drumFillActive()) return this._mix;
     const eff = { ...this._mix };
     for (const k of sec.mutes) eff[k] = false;
     // The counter line is musical accompaniment to the melody — if a section
@@ -917,6 +923,8 @@ export class LofiEngine {
     this.themeMaxCycles = 0;
     this.lastThemeChordIndex = -1;
     this.currentBar = 0;
+    this.manualFillActive = false;
+    this.manualFillPending = false;
     this.updateSection();
     this.applyEffectiveMix();
     this.refreshDrumMasks();
@@ -959,6 +967,102 @@ export class LofiEngine {
     while (midi - targetMidi > 6) midi -= 12;
     while (targetMidi - midi > 6) midi += 12;
     return this.midiToNote(midi);
+  }
+
+  private triggerBass(note: string, duration: string, time: number, velocity: number, late = 0): void {
+    this.bassSynth.triggerAttackRelease(note, duration, time + late, clamp(velocity, 0.05, 1));
+  }
+
+  private walkingBassNote(walkPos: number): string {
+    if (walkPos === 0) return this.cachedBassRoots[this.chordIndex];
+    if (walkPos === 1) return this.cachedBassThirds[this.chordIndex];
+    if (walkPos === 2) return this.cachedBassFifths[this.chordIndex];
+    return this.cachedBassApproach[(this.chordIndex + 1) % this.cachedProg.chords.length];
+  }
+
+  private playBassStep(step: number, time: number): void {
+    const chord = this.chordIndex;
+    const nextChord = (chord + 1) % this.cachedProg.chords.length;
+
+    if (this.currentBassStyle === 'walking-jazz') {
+      const walkPos = this.cachedPattern.walkingSteps.indexOf(step);
+      if (walkPos >= 0) {
+        const dur = this.currentTimeSignature === '6/8' ? '8n' : '4n';
+        this.triggerBass(this.walkingBassNote(walkPos), dur, time, 0.68 + this.rnd() * 0.1);
+      } else if (step === this.cachedBassPickupStep && this.activeEnergy > 0.74 && this.rnd() < 0.34) {
+        this.triggerBass(this.cachedBassApproach[nextChord], '8n', time, 0.56);
+      }
+      return;
+    }
+
+    if (this.currentBassStyle === 'lazy-guitarist') {
+      const lazyPos = this.cachedPattern.lazySteps.indexOf(step);
+      if (lazyPos === 0 && this.rnd() > 0.08) {
+        this.triggerBass(this.cachedBassRoots[chord], '2n', time, 0.62 + this.rnd() * 0.08, this.rnd() * 0.018);
+      } else if (lazyPos === 1 && this.rnd() > 0.18) {
+        this.triggerBass(this.cachedBassFifths[chord], '4n', time, 0.52 + this.rnd() * 0.08, 0.012 + this.rnd() * 0.028);
+      }
+      return;
+    }
+
+    if (this.currentBassStyle === 'upright') {
+      const walkPos = this.cachedPattern.walkingSteps.indexOf(step);
+      if (walkPos >= 0 && (walkPos === 0 || this.rnd() > 0.1)) {
+        const notes = [
+          this.cachedBassRoots[chord],
+          this.cachedBassFifths[chord],
+          this.cachedBassTenths[chord],
+          this.cachedBassApproach[nextChord],
+        ];
+        const velocity = walkPos === 0 ? 0.62 : 0.48 + this.rnd() * 0.12;
+        this.triggerBass(notes[walkPos % notes.length], '4n', time, velocity, 0.006 + this.rnd() * 0.02);
+      }
+      return;
+    }
+
+    if (this.currentBassStyle === 'dub') {
+      if (step === 0) {
+        this.triggerBass(this.cachedBassRoots[chord], '2n', time, 0.72);
+      } else if (step === this.cachedBassHalfStep) {
+        this.triggerBass(this.cachedBassRoots[chord], '4n', time, 0.5);
+      } else if (step === this.cachedBassPickupStep) {
+        this.triggerBass(this.cachedBassApproach[nextChord], '8n', time, 0.55);
+      }
+      return;
+    }
+
+    if (this.currentBassStyle === 'synth-sub') {
+      if (step === 0) {
+        this.triggerBass(this.cachedBassSubs[chord], '8n', time, 0.82);
+      } else if (step === this.cachedBassHalfStep) {
+        this.triggerBass(this.cachedBassSubs[chord], '16n', time, 0.68);
+      } else if (step === this.cachedBassQuarterStep || step === this.cachedBassThreeQuarterStep) {
+        this.triggerBass(this.cachedBassRoots[chord], '16n', time, 0.48);
+      }
+      return;
+    }
+
+    if (this.currentBassStyle === 'off-grid') {
+      if (step === 0) {
+        this.triggerBass(this.cachedBassRoots[chord], '8n', time, 0.58 + this.rnd() * 0.16, 0.012 + this.rnd() * 0.045);
+      } else if (step === this.cachedBassQuarterStep && this.rnd() < 0.7) {
+        this.triggerBass(this.cachedBassFifths[chord], '16n', time, 0.42 + this.rnd() * 0.16, 0.018 + this.rnd() * 0.052);
+      } else if (step === this.cachedBassHalfStep && this.rnd() < 0.85) {
+        const note = this.rnd() < 0.5 ? this.cachedBassRoots[chord] : this.cachedBassOctaves[chord];
+        this.triggerBass(note, '8n', time, 0.48 + this.rnd() * 0.16, 0.01 + this.rnd() * 0.04);
+      } else if (step === this.cachedBassThreeQuarterStep && this.rnd() < 0.55) {
+        this.triggerBass(this.cachedBassFifths[chord], '16n', time, 0.4 + this.rnd() * 0.14, 0.02 + this.rnd() * 0.055);
+      } else if (step === this.cachedBassPickupStep && this.rnd() < 0.38) {
+        this.triggerBass(this.cachedBassApproach[nextChord], '16n', time, 0.42 + this.rnd() * 0.12, 0.02 + this.rnd() * 0.05);
+      }
+      return;
+    }
+
+    const interval = this.cachedBassStepToInterval.get(step);
+    if (interval !== undefined) {
+      const velocity = interval === 0 ? 0.62 : 0.52;
+      this.triggerBass(this.cachedBassRoots[chord], interval === 0 ? '4n' : '8n', time, velocity);
+    }
   }
 
   private chordMovementScore(candidate: number[], previous: number[] | null, baseCenter: number): number {
@@ -1261,6 +1365,22 @@ export class LofiEngine {
     this.vinyl.stop();
     this.chordSynth.releaseAll();
     this.guitarSampler.releaseAll();
+    this.manualFillActive = false;
+    this.manualFillPending = false;
+    this.refreshDrumFillBuffers();
+  }
+
+  queueDrumFill(): void {
+    if (!this.sequence) return;
+    if (this.currentStep < this.cachedPattern.fillStartStep) {
+      if (this.manualFillActive) return;
+      this.manualFillActive = true;
+      this.refreshDrumFillBuffers();
+      this.applyEffectiveMix();
+      return;
+    }
+
+    this.manualFillPending = true;
   }
 
   // tick() is called on every 16th note step. It must not allocate — all data comes from caches.
@@ -1268,14 +1388,18 @@ export class LofiEngine {
     if (step === 0) {
       this.chordIndex = (this.chordIndex + 1) % this.cachedProg.chords.length;
       this.generateMelodyPattern();
+      const prevFillActive = this.drumFillActive();
+      let sectionChanged = false;
       if (this.songFormEnabled) {
         this.currentBar++;
         const prevSection = this.sectionIdx;
-        const prevFill = this.isFillBar;
         this.updateSection();
-        if (this.sectionIdx !== prevSection || this.isFillBar !== prevFill) {
-          this.applyEffectiveMix();
-        }
+        sectionChanged = this.sectionIdx !== prevSection;
+      }
+      this.manualFillActive = this.manualFillPending;
+      this.manualFillPending = false;
+      if (sectionChanged || this.drumFillActive() !== prevFillActive) {
+        this.applyEffectiveMix();
       }
       this.refreshDrumMasks();
     }
@@ -1295,15 +1419,18 @@ export class LofiEngine {
       this.triggerHihat(time, '32n', 0.5 + this.activeEnergy * 0.18 + this.rnd() * 0.12);
     }
 
-    // Snare-roll fill on the last beat group of a fill bar, telegraphing the next section.
-    if (this.activeMix.snare && this.fillSnareMask[step]) {
-      const vel = 0.32 + (step - this.cachedPattern.fillStartStep) * 0.16;
-      this.triggerSnare(time, '16n', vel);
+    if (this.activeMix.kick && this.fillKickVel[step] > 0) {
+      const vel = this.fillKickVel[step];
+      this.triggerKick(time, '16n', vel);
+      this.triggerSidechain(time, vel);
     }
 
-    if (this.activeMix.kick && this.fillKickMask[step]) {
-      this.triggerKick(time, '16n', 0.6);
-      this.triggerSidechain(time, 0.75);
+    if (this.activeMix.snare && this.fillSnareVel[step] > 0) {
+      this.triggerSnare(time, '16n', this.fillSnareVel[step]);
+    }
+
+    if (this.activeMix.hihat && this.fillHihatVel[step] > 0) {
+      this.triggerHihat(time, '32n', this.fillHihatVel[step]);
     }
 
     if (this.activeMix.chord && this.cachedChordStepSet.has(step)) {
@@ -1341,54 +1468,8 @@ export class LofiEngine {
       }
     }
 
-    if (this.activeMix.bass && this.currentBassStyle === 'walking') {
-      const walkPos = this.cachedPattern.walkingSteps.indexOf(step);
-      if (walkPos >= 0) {
-        let bassNote: string;
-        if (walkPos === 0) bassNote = this.cachedBassRoots[this.chordIndex];
-        else if (walkPos === 1) bassNote = this.cachedBassThirds[this.chordIndex];
-        else if (walkPos === 2) bassNote = this.cachedBassFifths[this.chordIndex];
-        else bassNote = this.cachedBassApproach[(this.chordIndex + 1) % this.cachedProg.chords.length];
-        this.bassSynth.triggerAttackRelease(bassNote, '4n', time, 0.75);
-      }
-    } else if (this.activeMix.bass && this.currentBassStyle === 'lazy') {
-      const lazyPos = this.cachedPattern.lazySteps.indexOf(step);
-      if (lazyPos === 0) {
-        // Long sustained root on the downbeat
-        this.bassSynth.triggerAttackRelease(this.cachedBassRoots[this.chordIndex], '2n', time, 0.7);
-      } else if (lazyPos === 1) {
-        // Syncopated fifth, dragged feel via small late jitter
-        const drag = this.rnd() * 0.02;
-        this.bassSynth.triggerAttackRelease(this.cachedBassFifths[this.chordIndex], '4n', time + drag, 0.6);
-      }
-    } else if (this.activeMix.bass && this.currentBassStyle === 'bounce') {
-      if (step === 0) {
-        this.bassSynth.triggerAttackRelease(this.cachedBassRoots[this.chordIndex], '8n', time, 0.75);
-      } else if (step === this.cachedBassQuarterStep || step === this.cachedBassThreeQuarterStep) {
-        this.bassSynth.triggerAttackRelease(this.cachedBassFifths[this.chordIndex], '16n', time, 0.58);
-      } else if (step === this.cachedBassHalfStep) {
-        this.bassSynth.triggerAttackRelease(this.cachedBassOctaves[this.chordIndex], '8n', time, 0.65);
-      }
-    } else if (this.activeMix.bass && this.currentBassStyle === 'dub') {
-      if (step === 0) {
-        this.bassSynth.triggerAttackRelease(this.cachedBassRoots[this.chordIndex], '2n', time, 0.72);
-      } else if (step === this.cachedBassHalfStep) {
-        this.bassSynth.triggerAttackRelease(this.cachedBassRoots[this.chordIndex], '4n', time, 0.5);
-      } else if (step === this.cachedBassPickupStep) {
-        this.bassSynth.triggerAttackRelease(this.cachedBassApproach[(this.chordIndex + 1) % this.cachedProg.chords.length], '8n', time, 0.55);
-      }
-    } else if (this.activeMix.bass && this.currentBassStyle === 'pedal') {
-      if (step === 0 || step === this.cachedBassQuarterStep || step === this.cachedBassHalfStep) {
-        this.bassSynth.triggerAttackRelease(this.cachedBassRoots[this.chordIndex], '8n', time, 0.62);
-      } else if (step === this.cachedBassThreeQuarterStep) {
-        this.bassSynth.triggerAttackRelease(this.cachedBassFifths[this.chordIndex], '8n', time, 0.6);
-      }
-    } else if (this.activeMix.bass) {
-      const interval = this.cachedBassStepToInterval.get(step);
-      if (interval !== undefined) {
-        const raw = interval === 0 ? this.cachedBassRoots[this.chordIndex] : this.cachedBassFifths[this.chordIndex];
-        this.bassSynth.triggerAttackRelease(raw, '8n', time, 0.7);
-      }
+    if (this.activeMix.bass) {
+      this.playBassStep(step, time);
     }
 
     const melHit = this.melodyPatternBuf[step];

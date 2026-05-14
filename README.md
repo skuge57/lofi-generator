@@ -9,10 +9,11 @@ Built with React 19, TypeScript, and Vite.
 - **8 chord progressions** — warm jazz voicings (maj7, m7, m9, 13) covering moods from "Sunday Morning" to "Late Night"
 - **8 rhythmic moods** — `chill`, `sad`, `jazzy`, `dreamy`, `rainy`, `dusty`, `upbeat`, and `sleepy`, each with its own kick/snare/hihat pattern and chord placement
 - **4 time signatures** — switch between `4/4`, `3/4`, `5/4`, and `6/8` with dedicated drum, chord, bass, and fill patterns
-- **6 bass styles** — `simple` (root + fifth), `walking` (root → 3rd → 5th → approach), `lazy` (sustained root + syncopated fifth), plus `bounce`, `dub`, and `pedal` lines
+- **7 bass player personalities** — `root-only`, `synth-sub`, `dub`, `lazy-guitarist`, `walking-jazz`, `upright`, and `off-grid` bass behavior
 - **Procedural melody** — progression-level call/answer themes that repeat across chord cycles before mutating, with phrase endings snapped onto chord tones for tension/release
 - **Counter-melody** — a soft second voice that harmonizes key lead notes and replies in nearby rests, staying a third or sixth below on chord tones
-- **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, kick/snare dropped) → A (8). Transition sections end on a snare-roll fill that telegraphs the next section.
+- **Song form arrangement** — optional A/B/bridge structure that loops automatically: 4-bar intro (no drums) → A (8) → B (8, thinned drums) → A (8) → bridge (4, kick/snare dropped) → A (8). Transition sections end on tasteful kick/snare/hat fills that telegraph the next section.
+- **Live drum fills** — queue a short lo-fi fill from the header button or `F`; it lands on the next bar tail so performance moves stay in the pocket
 - **Energy curve** — a single energy control shapes the song form by section, morphing drum density, hi-hat activity, melody activity, and filter brightness over the arrangement
 - **Per-instrument mix controls** — mute chords, bass, kick, snare, hi-hat, melody, counter-melody, or vinyl crackle independently, then trim each instrument from 0–150%
 - **Live mix controls** — BPM, key shift, octave shifts, chord length & timing jitter, sidechain ducking, drum hit probability, per-instrument volume, master volume, reverb, vinyl noise, tape wobble, bitcrush, low/high-pass filters
@@ -57,7 +58,7 @@ The audio engine (`src/engine/lofiEngine.ts`) drives a `Tone.Sequence` at 16th n
 - Chord progressions and rhythm patterns live in `src/engine/musicTheory.ts`
 - The signal chain is: instruments → per-instrument gates → highpass → lowpass → tape wow/flutter → bitcrusher → limiter → master volume → output, with reverb fed in parallel as a send.
 - The chord pad can switch between Rhodes/Wurli-style keys, sampled muted guitar, vibes, tape choir, synth strings, organ, and glassy FM tones; the bass is a filtered MonoSynth; drums are synthesized (MembraneSynth kick, NoiseSynth snare, filtered NoiseSynth hat); vinyl texture layers filtered pink-noise dust with intermittent clicks, low pops, and brief dropouts
-- `src/urlState.ts` serializes most controls into the URL, including seed, mood, key, progression, reharmonization, voice, time signature, bass style, arrangement, mutes, per-instrument volumes, and tone settings. Macro controls write into those same detailed settings, so shared links reproduce the resulting beat.
+- `src/urlState.ts` serializes most controls into the URL, including seed, mood, key, progression, reharmonization, voice, time signature, bass personality, arrangement, mutes, per-instrument volumes, and tone settings. Macro controls write into those same detailed settings, so shared links reproduce the resulting beat.
 
 ## Future plans
 
@@ -84,8 +85,8 @@ Rough roadmap, no promises:
 - [ ] **Section-aware pattern variation** — drum, bass, chord, and melody patterns subtly mutate between A, B, and bridge sections so the form feels more arranged
 - [ ] **Melody personalities** — choose between sparse, jazzy, pentatonic, guitar-like, vocal, or arpeggiated lead behavior
 - [ ] **Chord substitution intensity** — scale reharmonization from plain diatonic changes through extensions, secondary dominants, tritone substitutions, and altered chords
-- [ ] **Bass player personalities** — bass behavior can lean upright, synth sub, dubby, lazy guitarist, walking jazz, off-grid, or root-only minimalist
-- [x] **Song sections** — A / B / bridge structure with automatic arrangement (drops drums for 4 bars, brings them back with a snare-roll fill)
+- [x] **Bass player personalities** — bass behavior can lean upright, synth sub, dubby, lazy guitarist, walking jazz, off-grid, or root-only minimalist
+- [x] **Song sections** — A / B / bridge structure with automatic arrangement (drops drums for 4 bars, brings them back with tasteful transition fills)
 - [x] **Energy curve** — evolve the track over the form instead of static playback: intro sparse; verse / A normal; B with more hats and melody; bridge filtered; return with fuller drums. Driven by a single **energy** value (0–100) that morphs density, filter, and pattern weights by section
 - [x] **Chord reharmonization** — optional flavor per progression: *diatonic*, *jazzy*, *darker*, *dreamy*, *spicy* — e.g. swap plain V for V13, tritone substitutions, or passing diminished chords while keeping the same Roman skeleton
 - [x] **Voice-leading mode** — choose close inversions so pad voices move stepwise between changes instead of big jumps; warmer, more "played" pads
@@ -101,7 +102,8 @@ Rough roadmap, no promises:
 - [ ] **Arrangement timeline** — show the current song section and bar position across intro, A, B, bridge, and return sections
 - [ ] **Text-to-vibe mapping** — convert short prompts like "sleepy rainy jazz cafe" into mood, BPM, progression, instrument, filter, and texture settings
 - [ ] **Study timer mode** — add focus/break timers with gentle musical transitions instead of harsh alarms
-- [ ] **Live performance controls** — trigger fills, drop drums, mute instruments, sweep filters, increase energy, or randomize selected parts during playback
+- [ ] **Live performance controls** — drop drums, mute instruments, sweep filters, increase energy, or randomize selected parts during playback
+- [x] **Live drum fills** — queue a bar-tail fill from the header button or `F` during playback
 - [x] **Seeded generation + URL sharing** — a **seed** field and serialized URL settings reproduce/share the same beat, e.g. `/?seed=blue-cafe-4921&key=E&mood=sad`
 - [x] **Randomize** — one action generates a fresh full parameter set and seed
 - [x] **Per-instrument levels** — individual volume sliders for chords, bass, kick, snare, hi-hat, melody, counter-melody, and vinyl
@@ -120,7 +122,7 @@ Rough roadmap, no promises:
 - [ ] **Render-safe mode** — temporarily freeze live UI changes during offline export so rendered audio stays deterministic and glitch-free
 
 ### Engineering
-- [ ] **Tests for `musicTheory.ts`** — transpose, progression lookup, pattern shape
+- [x] **Tests for `musicTheory.ts`** — transpose, progression lookup, pattern shape
 - [ ] **Seed snapshot tests** — verify that the same seed and settings always produce the same progression, bass, melody, counter-melody, and serialized URL state
 - [ ] **Audio load meter** — hidden debug panel showing scheduler timing, active voices, cache rebuilds, and late events
 - [ ] **Engine API separation** — expose the lo-fi engine independently from React so playback, MIDI export, WAV rendering, and tests can share the same core logic

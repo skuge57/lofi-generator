@@ -8,7 +8,16 @@ export type SceneId =
   | 'fireplace'
   | 'late-night';
 export type TimeSignature = '4/4' | '3/4' | '5/4' | '6/8';
-export type BassStyle = 'simple' | 'walking' | 'lazy' | 'bounce' | 'dub' | 'pedal';
+export const BASS_STYLES = [
+  'root-only',
+  'synth-sub',
+  'dub',
+  'lazy-guitarist',
+  'walking-jazz',
+  'upright',
+  'off-grid',
+] as const;
+export type BassStyle = typeof BASS_STYLES[number];
 export type DrumKit = 'synth' | 'sample';
 export type ReharmFlavor = 'diatonic' | 'jazzy' | 'darker' | 'dreamy' | 'spicy';
 export type ChordVoice =

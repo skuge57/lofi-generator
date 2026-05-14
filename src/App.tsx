@@ -6,7 +6,8 @@ import { LeftControls, RhythmControls, RightControls, SimpleControls } from './c
 import { InstrumentToggles } from './components/InstrumentToggles';
 import { ProgressionPicker } from './components/ProgressionPicker';
 import { PROGRESSIONS } from './engine/musicTheory';
-import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, SceneId, SectionInfo, TimeSignature } from './engine/types';
+import { BASS_STYLES } from './engine/types';
+import type { ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, SceneId, SectionInfo, TimeSignature } from './engine/types';
 import { DEFAULT_PARAMS } from './defaults';
 import { parseParamsFromSearch, serializeParamsToSearch } from './urlState';
 import './App.css';
@@ -16,7 +17,6 @@ const MASTER_VOLUME_MAX = 2;
 const MASTER_VOLUME_KEY_STEP = 0.05;
 const MOODS: Mood[] = ['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy'];
 const TIME_SIGNATURES: TimeSignature[] = ['4/4', '3/4', '5/4', '6/8'];
-const BASS_STYLES: BassStyle[] = ['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal'];
 const DRUM_KITS: DrumKit[] = ['synth', 'sample'];
 const CHORD_VOICES: ChordVoice[] = [
   'rhodes',
@@ -44,6 +44,7 @@ type RandomizeLockKey = 'bpm' | 'chords' | 'drums' | 'bass' | 'melody' | 'toneMi
 type RandomizeLocks = Record<RandomizeLockKey, boolean>;
 type ControlMode = 'simple' | 'advanced';
 
+const CONTROL_MODE_STORAGE_KEY = 'lofi.controlMode';
 const RANDOMIZE_LOCKS: { key: RandomizeLockKey; label: string }[] = [
   { key: 'bpm', label: 'BPM' },
   { key: 'chords', label: 'Chords' },
@@ -230,6 +231,31 @@ function isTextInputTarget(target: EventTarget | null) {
   );
 }
 
+function isControlMode(value: string | null): value is ControlMode {
+  return value === 'simple' || value === 'advanced';
+}
+
+function readStoredControlMode(): ControlMode {
+  if (typeof window === 'undefined') return 'simple';
+
+  try {
+    const stored = window.localStorage.getItem(CONTROL_MODE_STORAGE_KEY);
+    return isControlMode(stored) ? stored : 'simple';
+  } catch {
+    return 'simple';
+  }
+}
+
+function storeControlMode(mode: ControlMode): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(CONTROL_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Storage can be blocked in private browsing or embedded contexts.
+  }
+}
+
 export default function App() {
   const [playing, setPlaying] = useState(false);
   const [params, setParams] = useState<EngineParams>(() => ({
@@ -239,7 +265,7 @@ export default function App() {
   const [chordIndex, setChordIndex] = useState(0);
   const [sectionInfo, setSectionInfo] = useState<SectionInfo | null>(null);
   const [randomizeLocks, setRandomizeLocks] = useState<RandomizeLocks>(DEFAULT_RANDOMIZE_LOCKS);
-  const [controlMode, setControlMode] = useState<ControlMode>('simple');
+  const [controlMode, setControlMode] = useState<ControlMode>(readStoredControlMode);
   const [sceneId, setSceneId] = useState<SceneId | null>(() => {
     const q = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
     const s = q.get('scene');
@@ -347,6 +373,10 @@ export default function App() {
     setRandomizeLocks(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  const handleQueueDrumFill = useCallback(() => {
+    engineRef.current?.queueDrumFill();
+  }, []);
+
   useEffect(() => {
     return () => {
       engineRef.current?.dispose();
@@ -354,6 +384,10 @@ export default function App() {
       cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    storeControlMode(controlMode);
+  }, [controlMode]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -364,6 +398,12 @@ export default function App() {
       if (event.code === 'Space') {
         event.preventDefault();
         void handleToggle();
+        return;
+      }
+
+      if (event.code === 'KeyF') {
+        event.preventDefault();
+        handleQueueDrumFill();
         return;
       }
 
@@ -435,6 +475,15 @@ export default function App() {
               ))}
             </div>
           </div>
+          <button
+            type="button"
+            className="fill-btn"
+            onClick={handleQueueDrumFill}
+            disabled={!playing}
+            aria-label="Queue drum fill"
+          >
+            Fill
+          </button>
           <Player playing={playing} onToggle={handleToggle} />
         </div>
       </div>

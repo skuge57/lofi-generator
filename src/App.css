@@ -193,7 +193,8 @@ body {
   color: #e0c090;
 }
 
-.randomize-btn {
+.randomize-btn,
+.fill-btn {
   height: 40px;
   padding: 0 14px;
   border: 1px solid #3a3028;
@@ -208,14 +209,25 @@ body {
   transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
 }
 
-.randomize-btn:hover {
+.randomize-btn:hover,
+.fill-btn:hover:not(:disabled) {
   border-color: #c8a87a;
   background: #c8a87a18;
   color: #e0c090;
 }
 
-.randomize-btn:active {
+.randomize-btn:active,
+.fill-btn:active:not(:disabled) {
   transform: translateY(1px);
+}
+
+.fill-btn {
+  min-width: 58px;
+}
+
+.fill-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 /* Controls */
@@ -943,7 +955,8 @@ input[type='range']::-moz-range-thumb {
     font-size: 1.45rem;
   }
 
-  .randomize-btn {
+  .randomize-btn,
+  .fill-btn {
     height: 36px;
     padding: 0 10px;
     font-size: 0.68rem;

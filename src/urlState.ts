@@ -1,4 +1,5 @@
 import { DEFAULT_PARAMS } from './defaults';
+import { BASS_STYLES } from './engine/types';
 import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, TimeSignature } from './engine/types';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
@@ -17,7 +18,15 @@ const TIME_SIG_DECODE: Record<string, TimeSignature> = {
 };
 
 const MOODS = new Set<Mood>(['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy']);
-const BASS = new Set<BassStyle>(['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal']);
+const BASS = new Set<BassStyle>(BASS_STYLES);
+const LEGACY_BASS_ALIASES: Record<string, BassStyle> = {
+  simple: 'root-only',
+  walking: 'walking-jazz',
+  lazy: 'lazy-guitarist',
+  bounce: 'upright',
+  dub: 'dub',
+  pedal: 'synth-sub',
+};
 const DRUM_KITS = new Set<DrumKit>(['synth', 'sample']);
 const CHORD_VOICES = new Set<ChordVoice>([
   'rhodes',
@@ -71,6 +80,11 @@ function parseNoteKey(raw: string): number | null {
   return idx >= 0 ? idx : null;
 }
 
+function parseBassStyle(raw: string): BassStyle | null {
+  if (BASS.has(raw as BassStyle)) return raw as BassStyle;
+  return LEGACY_BASS_ALIASES[raw] ?? null;
+}
+
 export function parseParamsFromSearch(search: string): Partial<EngineParams> {
   const q = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
   const out: Partial<EngineParams> = {};
@@ -110,7 +124,10 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
   if (ts && TIME_SIG_DECODE[ts]) out.timeSignature = TIME_SIG_DECODE[ts];
 
   const bass = q.get('bass') ?? q.get('bs');
-  if (bass && BASS.has(bass as BassStyle)) out.bassStyle = bass as BassStyle;
+  if (bass) {
+    const style = parseBassStyle(bass);
+    if (style) out.bassStyle = style;
+  }
 
   const sf = q.get('songForm') ?? q.get('sf');
   if (sf === '1' || sf === 'true') out.songForm = true;

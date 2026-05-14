@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { BASS_STYLES } from '../engine/types';
 import type { BassStyle, ChordVoice, DrumKit, Mood, EngineParams, SceneId, TimeSignature } from '../engine/types';
 import { SCENES } from '../engine/sceneEngine';
 import { InfoTip } from './InfoTip';
@@ -17,7 +18,15 @@ export interface LeftControlsProps extends ControlsProps {
 
 const MOODS: Mood[] = ['chill', 'sad', 'jazzy', 'dreamy', 'rainy', 'dusty', 'upbeat', 'sleepy'];
 const TIME_SIGNATURES: TimeSignature[] = ['4/4', '3/4', '5/4', '6/8'];
-const BASS_STYLES: BassStyle[] = ['simple', 'walking', 'lazy', 'bounce', 'dub', 'pedal'];
+const BASS_STYLE_LABELS: Record<BassStyle, string> = {
+  'root-only': 'Root',
+  'synth-sub': 'Sub',
+  dub: 'Dub',
+  'lazy-guitarist': 'Lazy',
+  'walking-jazz': 'Walk',
+  upright: 'Upright',
+  'off-grid': 'Off grid',
+};
 const DRUM_KITS: { value: DrumKit; label: string }[] = [
   { value: 'synth', label: 'Synth' },
   { value: 'sample', label: 'Samples' },
@@ -183,7 +192,7 @@ const MACROS = [
     value: (p: EngineParams) => macroFromRange(p.energy, 28, 98),
     update: (p: EngineParams, v: number): Partial<EngineParams> => ({
       energy: Math.round(28 + v * 70),
-      bassStyle: v > 0.72 ? 'walking' : v > 0.46 ? 'bounce' : v > 0.22 ? 'lazy' : 'simple',
+      bassStyle: v > 0.72 ? 'walking-jazz' : v > 0.46 ? 'upright' : v > 0.22 ? 'lazy-guitarist' : 'root-only',
       drumProb: {
         kick: round2(0.72 + v * 0.28),
         snare: round2(0.66 + v * 0.34),
@@ -227,6 +236,7 @@ const MACROS = [
         },
       };
       if (v > 0.78) update.chordVoice = 'muted-guitar';
+      if (v > 0.82) update.bassStyle = 'off-grid';
       return update;
     },
   },
@@ -687,7 +697,7 @@ export function RhythmControls({ params, onChange }: ControlsProps) {
     <div className="controls rhythm-controls">
       <span className="section-label section-label-row">
         <span>Bass</span>
-        <InfoTip text="Bass line vocabulary: Simple is roots/fifths; Walking outlines changes; Lazy uses long notes; Bounce is syncopated; Dub leaves space; Pedal hammers the root with accents." />
+        <InfoTip text="Bass player personality: Root stays minimal; Sub pulses low roots; Dub leaves space; Lazy drags roots and fifths; Walk outlines jazz changes; Upright adds softer quarter-note motion; Off grid plays loose and uneven." />
       </span>
       <div className="bass-style-grid" role="group" aria-label="Bass style">
         {BASS_STYLES.map(style => (
@@ -697,7 +707,7 @@ export function RhythmControls({ params, onChange }: ControlsProps) {
             className={`mood-btn bass-style-btn ${params.bassStyle === style ? 'active' : ''}`}
             onClick={() => onChange({ bassStyle: style })}
           >
-            {style}
+            {BASS_STYLE_LABELS[style]}
           </button>
         ))}
       </div>

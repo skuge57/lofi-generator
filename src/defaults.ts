@@ -47,7 +47,7 @@ export const DEFAULT_PARAMS: EngineParams = {
   drumKit: 'synth',
   drumProb: { kick: 1, snare: 1, hihat: 1 },
   keyShift: 0,
-  bassStyle: 'simple',
+  bassStyle: 'root-only',
   songForm: false,
   energy: 70,
   timeSignature: '4/4',
