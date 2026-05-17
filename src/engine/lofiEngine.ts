@@ -19,6 +19,7 @@ const SIDECHAIN_CHORD_FLOOR = 0.56;
 const SIDECHAIN_BASS_FLOOR = 0.68;
 const SIDECHAIN_ATTACK_SECONDS = 0.012;
 const SIDECHAIN_RELEASE_SECONDS = 0.24;
+const VISUAL_EVENT_CAPACITY = 384;
 type ChordSynth = Tone.PolySynth<Tone.FMSynth | Tone.AMSynth | Tone.Synth>;
 
 function clamp(n: number, min: number, max: number): number {
@@ -26,6 +27,18 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 type MelodyDur = '8n' | '4n' | '2n';
+export type VisualLane = 'kick' | 'snare' | 'hihat' | 'bass' | 'chord' | 'melody' | 'counter';
+
+export interface VisualEvent {
+  id: number;
+  lane: VisualLane;
+  time: number;
+  step: number;
+  velocity: number;
+  note: string;
+  durationSteps: number;
+  durationSeconds: number;
+}
 
 interface Motif {
   // Pitch deltas relative to the bar's anchor position in the sorted melody pool.
@@ -96,6 +109,17 @@ export class LofiEngine {
   private currentStepsPerBar = DEFAULT_STEPS_PER_BAR;
   private currentStep = 0;
   private chordIndex = 0;
+  private visualCursor = 0;
+  private visualEvents: VisualEvent[] = Array.from({ length: VISUAL_EVENT_CAPACITY }, () => ({
+    id: -1,
+    lane: 'kick',
+    time: 0,
+    step: 0,
+    velocity: 0,
+    note: '',
+    durationSteps: 1,
+    durationSeconds: 0.1,
+  }));
 
   // Song-form state
   private songFormEnabled = false;
@@ -711,6 +735,49 @@ export class LofiEngine {
     return sequence;
   }
 
+  private durationToSteps(duration: Tone.Unit.Time | MelodyDur | number): number {
+    if (typeof duration === 'number') {
+      const secondsPerStep = this.secondsPerStep();
+      return clamp(Math.round(duration / secondsPerStep), 1, this.currentStepsPerBar);
+    }
+
+    if (duration === '2n') return 8;
+    if (duration === '4n') return 4;
+    if (duration === '8n') return 2;
+    return 1;
+  }
+
+  private secondsPerStep(): number {
+    const bpm = Math.max(1, Tone.getTransport().bpm.value);
+    return 60 / bpm / 4;
+  }
+
+  private durationToSeconds(duration: Tone.Unit.Time | MelodyDur | number): number {
+    if (typeof duration === 'number') return Math.max(0.03, duration);
+    return this.durationToSteps(duration) * this.secondsPerStep();
+  }
+
+  private recordVisualEvent(
+    lane: VisualLane,
+    time: number,
+    step: number,
+    velocity: number,
+    note = '',
+    durationSteps = 1,
+    durationSeconds = durationSteps * this.secondsPerStep()
+  ): void {
+    const event = this.visualEvents[this.visualCursor % VISUAL_EVENT_CAPACITY];
+    event.id = this.visualCursor;
+    event.lane = lane;
+    event.time = time;
+    event.step = step;
+    event.velocity = clamp(velocity, 0, 1);
+    event.note = note;
+    event.durationSteps = clamp(durationSteps, 1, this.currentStepsPerBar);
+    event.durationSeconds = Math.max(0.03, durationSeconds);
+    this.visualCursor++;
+  }
+
   private applyMix(mix: EngineParams['mix']): void {
     this.activeMix = mix;
     (['chord', 'bass', 'kick', 'snare', 'hihat', 'melody', 'counter'] as const).forEach(k => {
@@ -738,6 +805,7 @@ export class LofiEngine {
   }
 
   private triggerKick(time: number, duration: Tone.Unit.Time = '8n', velocity = 1): void {
+    this.recordVisualEvent('kick', time, this.currentStep, velocity, '', this.durationToSteps(duration), this.durationToSeconds(duration));
     if (this.currentDrumKit === 'sample' && this.sampleKick.loaded) {
       this.sampleKick.triggerAttackRelease('C1', duration, time, velocity);
       return;
@@ -746,6 +814,7 @@ export class LofiEngine {
   }
 
   private triggerSnare(time: number, duration: Tone.Unit.Time = '8n', velocity = 1): void {
+    this.recordVisualEvent('snare', time, this.currentStep, velocity, '', this.durationToSteps(duration), this.durationToSeconds(duration));
     if (this.currentDrumKit === 'sample' && this.sampleSnare.loaded) {
       this.sampleSnare.triggerAttackRelease('C1', duration, time, velocity);
       return;
@@ -754,6 +823,7 @@ export class LofiEngine {
   }
 
   private triggerHihat(time: number, duration: Tone.Unit.Time = '32n', velocity = 1): void {
+    this.recordVisualEvent('hihat', time, this.currentStep, velocity, '', this.durationToSteps(duration), this.durationToSeconds(duration));
     if (this.currentDrumKit === 'sample' && this.sampleHihat.loaded) {
       this.sampleHihat.triggerAttackRelease('C1', duration, time, velocity);
       return;
@@ -970,7 +1040,9 @@ export class LofiEngine {
   }
 
   private triggerBass(note: string, duration: string, time: number, velocity: number, late = 0): void {
-    this.bassSynth.triggerAttackRelease(note, duration, time + late, clamp(velocity, 0.05, 1));
+    const noteTime = time + late;
+    this.recordVisualEvent('bass', noteTime, this.currentStep, velocity, note, this.durationToSteps(duration), this.durationToSeconds(duration));
+    this.bassSynth.triggerAttackRelease(note, duration, noteTime, clamp(velocity, 0.05, 1));
   }
 
   private walkingBassNote(walkPos: number): string {
@@ -1436,6 +1508,15 @@ export class LofiEngine {
     if (this.activeMix.chord && this.cachedChordStepSet.has(step)) {
       const jitter = this.rnd() * this.currentChordTiming * 0.12;
       const chordTime = time + jitter;
+      this.recordVisualEvent(
+        'chord',
+        chordTime,
+        step,
+        0.58 + this.activeEnergy * 0.22,
+        shiftedNotes[0],
+        this.durationToSteps(this.currentChordLength),
+        this.durationToSeconds(this.currentChordLength)
+      );
       if (this.currentChordVoice === 'muted-guitar') {
         const dur = Math.min(this.currentChordLength, 0.16);
         const strumDown = this.rnd() < 0.78;
@@ -1480,6 +1561,7 @@ export class LofiEngine {
 
       if (this.activeMix.melody && melHit !== null && this.rnd() < this.activeMelodyChance) {
         melodyFired = true;
+        this.recordVisualEvent('melody', time + jitter, step, 0.52 + this.activeEnergy * 0.22, melHit.note, this.durationToSteps(melHit.dur), this.durationToSeconds(melHit.dur));
         this.melodySynth.triggerAttackRelease(melHit.note, melHit.dur, time + jitter, 0.34 + this.activeEnergy * 0.18 + this.rnd() * 0.12);
         this.prevMelodyNote = melHit.note;
       }
@@ -1490,6 +1572,7 @@ export class LofiEngine {
           : clamp(0.48 + this.activeEnergy * 0.25, 0.42, 0.78);
         if (melodyFired || this.rnd() < counterChance) {
           const counterDelay = melHit !== null ? 0 : this.rnd() * 0.012;
+          this.recordVisualEvent('counter', time + jitter + counterDelay, step, 0.46, counterHit.note, this.durationToSteps(counterHit.dur), this.durationToSeconds(counterHit.dur));
           this.counterSynth.triggerAttackRelease(counterHit.note, counterHit.dur, time + jitter + counterDelay, 0.28 + this.rnd() * 0.09);
         }
       }
@@ -1660,6 +1743,22 @@ export class LofiEngine {
 
   getStep(): number {
     return this.currentStep;
+  }
+
+  getStepsPerBar(): number {
+    return this.currentStepsPerBar;
+  }
+
+  getVisualEvents(): readonly VisualEvent[] {
+    return this.visualEvents;
+  }
+
+  getVisualCursor(): number {
+    return this.visualCursor;
+  }
+
+  getVisualCapacity(): number {
+    return VISUAL_EVENT_CAPACITY;
   }
 
   getChordIndex(): number {

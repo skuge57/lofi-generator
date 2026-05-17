@@ -5,6 +5,7 @@ import { Player } from './components/Player';
 import { LeftControls, RhythmControls, RightControls, SimpleControls } from './components/Controls';
 import { InstrumentToggles } from './components/InstrumentToggles';
 import { ProgressionPicker } from './components/ProgressionPicker';
+import { Visualizer } from './components/Visualizer';
 import { PROGRESSIONS } from './engine/musicTheory';
 import { BASS_STYLES } from './engine/types';
 import type { ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, SceneId, SectionInfo, TimeSignature } from './engine/types';
@@ -487,6 +488,8 @@ export default function App() {
           <Player playing={playing} onToggle={handleToggle} />
         </div>
       </div>
+
+      <Visualizer engineRef={engineRef} playing={playing} />
 
       {controlMode === 'simple' ? (
         <SimpleControls params={params} onChange={handleParamChange} />

@@ -21,7 +21,7 @@ Built with React 19, TypeScript, and Vite.
 - **Vibe macros** — warmth, dust, space, movement, complexity, darkness, and human feel knobs move multiple detailed audio settings together
 - **Seeded sharing** — a seed field plus URL-serialized settings make beats reproducible and easy to share
 - **Lockable randomize** — generate a fresh parameter set from the header button while locking BPM, chords, drums, bass, melody, or tone / mix groups you want to keep
-- **Visual feedback** — current chord highlighted while the progression plays
+- **Visual feedback** — current chord highlighted while the progression plays, plus a lightweight scrolling piano-roll visualizer
 - **Cached scheduler data** — harmonic/rhythm data is pre-cached, and the melody/counter buffers are reused per bar so the 16th-note scheduler stays light
 
 ## Stack
@@ -114,7 +114,7 @@ Rough roadmap, no promises:
 - [x] **Basic keyboard shortcuts** — space to play/pause, ArrowUp/ArrowDown to adjust master volume
 - [x] **Responsive layout** — controls collapse from three columns to two and then one column on narrower screens
 - [ ] **More keyboard shortcuts** — `[` `]` to shift key, quick randomize, and focused transport/mix controls
-- [ ] **Visualizer upgrade** — animated waveform/spectrum, or a subtle scrolling piano roll
+- [x] **Visualizer upgrade** — animated waveform/spectrum, or a subtle scrolling piano roll
 
 ### Export / presets
 - [ ] **Project file import/export** — save and load full beat settings as a portable `.lofi.json` file in addition to URL sharing
