@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Tone from 'tone';
-import { SONG_ARRANGEMENT } from '../engine/musicTheory';
-import type { SectionInfo, SongSection } from '../engine/types';
+import { getSongForm } from '../engine/musicTheory';
+import type { SectionInfo, SongFormId, SongSection } from '../engine/types';
 
 interface Props {
   sectionInfo: SectionInfo | null;
   songForm: boolean;
+  songFormId: SongFormId;
   playing: boolean;
 }
 
@@ -27,6 +28,7 @@ const SECTION_COLORS: Record<string, { fill: string; fillActive: string; stroke:
   intro:  { fill: '#2a231d', fillActive: '#3d3226', stroke: '#4a3e33', label: 'Intro' },
   A:      { fill: '#3a2a1c', fillActive: '#6e4a2a', stroke: '#8a6238', label: 'A' },
   B:      { fill: '#4a2a1e', fillActive: '#a25230', stroke: '#c26640', label: 'B' },
+  C:      { fill: '#2a2434', fillActive: '#4a3a68', stroke: '#6a548a', label: 'C' },
   bridge: { fill: '#1e2f2a', fillActive: '#2f5148', stroke: '#4a7a6c', label: 'Bridge' },
   outro:  { fill: '#252220', fillActive: '#3a332d', stroke: '#4a4238', label: 'Outro' },
 };
@@ -35,9 +37,9 @@ function colorsFor(id: string) {
   return SECTION_COLORS[id] ?? SECTION_COLORS.A;
 }
 
-function buildLayout(): { rows: Layout[]; totalBars: number } {
+function buildLayout(sections: SongSection[]): { rows: Layout[]; totalBars: number } {
   let bar = 0;
-  const rows: Layout[] = SONG_ARRANGEMENT.map((section, index) => {
+  const rows: Layout[] = sections.map((section, index) => {
     const startBar = bar;
     bar += section.bars;
     return {
@@ -107,7 +109,7 @@ function useAnimatedProgress(sectionInfo: SectionInfo | null, playing: boolean):
   return progress;
 }
 
-export function ArrangementTimeline({ sectionInfo, songForm, playing }: Props) {
+export function ArrangementTimeline({ sectionInfo, songForm, songFormId, playing }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   const subBarProgress = useAnimatedProgress(sectionInfo, playing);
@@ -127,7 +129,7 @@ export function ArrangementTimeline({ sectionInfo, songForm, playing }: Props) {
 
   if (!songForm) return null;
 
-  const { rows, totalBars } = buildLayout();
+  const { rows, totalBars } = buildLayout(getSongForm(songFormId).sections);
   const activeIndex = sectionInfo?.index ?? -1;
   const activeRow = activeIndex >= 0 ? rows[activeIndex] : null;
   const playheadBar = activeRow
@@ -214,7 +216,7 @@ export function ArrangementTimeline({ sectionInfo, songForm, playing }: Props) {
               fill={isActive ? '#e8c896' : '#6a5a4a'}
               style={{ textTransform: 'uppercase', transition: 'fill 240ms ease' }}
             >
-              {c.label}
+              {row.section.label || c.label}
             </text>
           );
         })}
@@ -283,7 +285,7 @@ export function ArrangementTimeline({ sectionInfo, songForm, playing }: Props) {
 
       {sectionInfo && (
         <div className="timeline-readout" aria-live="polite">
-          <span className="timeline-readout-label">{colorsFor(sectionInfo.id).label}</span>
+          <span className="timeline-readout-label">{sectionInfo.label || colorsFor(sectionInfo.id).label}</span>
           <span className="timeline-readout-pos">
             bar {sectionInfo.barInSection + 1} / {sectionInfo.totalBars}
           </span>

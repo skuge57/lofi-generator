@@ -16,6 +16,7 @@ const RNG_FINGERPRINT_KEYS: (keyof EngineParams)[] = [
   'progressionId',
   'reharmFlavor',
   'songForm',
+  'songFormId',
   'timeSignature',
   'voiceLeading',
 ];

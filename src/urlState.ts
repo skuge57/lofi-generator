@@ -1,6 +1,6 @@
 import { DEFAULT_PARAMS } from './defaults';
-import { BASS_STYLES } from './engine/types';
-import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, TimeSignature } from './engine/types';
+import { BASS_STYLES, SONG_FORM_IDS } from './engine/types';
+import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, SongFormId, TimeSignature } from './engine/types';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
@@ -39,6 +39,7 @@ const CHORD_VOICES = new Set<ChordVoice>([
   'glass-pad',
 ]);
 const REHARM_FLAVORS = new Set<ReharmFlavor>(['diatonic', 'jazzy', 'darker', 'dreamy', 'spicy']);
+const SONG_FORMS_SET = new Set<SongFormId>(SONG_FORM_IDS);
 const INSTRUMENT_ORDER: (keyof EngineParams['mix'])[] = [
   'chord', 'bass', 'kick', 'snare', 'hihat', 'vinyl', 'melody', 'counter',
 ];
@@ -132,6 +133,9 @@ export function parseParamsFromSearch(search: string): Partial<EngineParams> {
   const sf = q.get('songForm') ?? q.get('sf');
   if (sf === '1' || sf === 'true') out.songForm = true;
   if (sf === '0' || sf === 'false') out.songForm = false;
+
+  const sfid = q.get('sfid') ?? q.get('songFormId');
+  if (sfid && SONG_FORMS_SET.has(sfid as SongFormId)) out.songFormId = sfid as SongFormId;
 
   const energy = q.get('energy') ?? q.get('en');
   if (energy !== null && energy !== '') {
@@ -269,6 +273,7 @@ export function serializeParamsToSearch(params: EngineParams): string {
   if (params.timeSignature !== d.timeSignature) q.set('ts', TIME_SIG_ENCODE[params.timeSignature]);
   if (params.bassStyle !== d.bassStyle) q.set('bass', params.bassStyle);
   if (params.songForm !== d.songForm) q.set('songForm', params.songForm ? '1' : '0');
+  if (params.songFormId !== d.songFormId) q.set('sfid', params.songFormId);
   if (params.energy !== d.energy) q.set('energy', String(params.energy));
   if (params.octaveShift !== d.octaveShift) q.set('oct', String(params.octaveShift));
   if (params.melodyOctave !== d.melodyOctave) q.set('moct', String(params.melodyOctave));

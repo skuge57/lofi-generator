@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { BASS_STYLES } from '../engine/types';
-import type { BassStyle, ChordVoice, DrumKit, Mood, EngineParams, SceneId, TimeSignature } from '../engine/types';
+import { BASS_STYLES, SONG_FORM_IDS } from '../engine/types';
+import type { BassStyle, ChordVoice, DrumKit, Mood, EngineParams, SceneId, SongFormId, TimeSignature } from '../engine/types';
 import { SCENES } from '../engine/sceneEngine';
+import { SONG_FORMS } from '../engine/musicTheory';
 import { InfoTip } from './InfoTip';
 
 interface ControlsProps {
@@ -409,6 +410,24 @@ export function LeftControls({ params, onChange, sceneId, sceneVolume, onSceneCh
         </button>
         <InfoTip text="Auto-arranges into sections, evolves energy by section, and adds short fills before transitions." />
       </div>
+      {params.songForm && (
+        <div className="song-form-picker" role="group" aria-label="Song form">
+          {SONG_FORM_IDS.map(id => {
+            const form = SONG_FORMS[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`song-form-option ${params.songFormId === id ? 'active' : ''}`}
+                onClick={() => onChange({ songFormId: id as SongFormId })}
+                title={form.description}
+              >
+                {form.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <label className="slider-row">
         <span className="slider-label">

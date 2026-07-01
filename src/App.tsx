@@ -491,7 +491,7 @@ export default function App() {
       </div>
 
       <Waveform engineRef={engineRef} playing={playing} />
-      <ArrangementTimeline sectionInfo={sectionInfo} songForm={params.songForm} playing={playing} />
+      <ArrangementTimeline sectionInfo={sectionInfo} songForm={params.songForm} songFormId={params.songFormId} playing={playing} />
 
       {controlMode === 'simple' ? (
         <SimpleControls params={params} onChange={handleParamChange} />

@@ -49,6 +49,7 @@ export const DEFAULT_PARAMS: EngineParams = {
   keyShift: 0,
   bassStyle: 'root-only',
   songForm: false,
+  songFormId: 'classic',
   energy: 70,
   timeSignature: '4/4',
 };

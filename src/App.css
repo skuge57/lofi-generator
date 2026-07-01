@@ -516,6 +516,44 @@ body {
   flex: 1;
 }
 
+.song-form-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.song-form-option {
+  min-width: 0;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #3a3028;
+  background: transparent;
+  color: #8a7060;
+  font-family: inherit;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-form-option:hover {
+  border-color: #c8a87a;
+  color: #c8a87a;
+}
+
+.song-form-option.active {
+  border-color: #c8a87a;
+  background: #c8a87a18;
+  color: #e0c090;
+}
+
 .slider-row {
   display: grid;
   grid-template-columns: minmax(90px, 0.62fr) minmax(88px, 1fr) 44px;

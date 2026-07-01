@@ -20,6 +20,8 @@ export const BASS_STYLES = [
 export type BassStyle = typeof BASS_STYLES[number];
 export type DrumKit = 'synth' | 'sample';
 export type ReharmFlavor = 'diatonic' | 'jazzy' | 'darker' | 'dreamy' | 'spicy';
+export const SONG_FORM_IDS = ['classic', 'aaba', 'verse-chorus', 'loop', 'through', 'ballad'] as const;
+export type SongFormId = typeof SONG_FORM_IDS[number];
 export type ChordVoice =
   | 'rhodes'
   | 'wurlitzer'
@@ -72,6 +74,7 @@ export interface EngineParams {
   keyShift: number;
   bassStyle: BassStyle;
   songForm: boolean;
+  songFormId: SongFormId;
   energy: number;
   timeSignature: TimeSignature;
 }

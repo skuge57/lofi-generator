@@ -1,4 +1,4 @@
-import type { ChordVoicing, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SongSection, TimeSignature } from './types';
+import type { ChordVoicing, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SongFormId, SongSection, TimeSignature } from './types';
 
 export const PROGRESSIONS: ProgressionDef[] = [
   {
@@ -411,25 +411,102 @@ export function getPattern(mood: Mood, timeSignature: TimeSignature = '4/4'): Rh
   return PATTERNS[timeSignature][mood];
 }
 
-// Song arrangement: a fixed A/B/bridge form that loops. Each section can mute
-// instruments, thin out the drum probability, shape the energy curve, and
+// Song arrangements: each form is a list of sections that loop. A section can
+// mute instruments, thin out the drum probability, shape the energy curve, and
 // optionally trigger a snare fill on its last bar to telegraph the next section.
-export const SONG_ARRANGEMENT: SongSection[] = [
-  { id: 'intro',  label: 'Intro',  bars: 4, mutes: ['kick', 'snare', 'hihat'], energy: 0.25, filterTilt: 0.72, fillOnLastBar: true },
-  { id: 'A',      label: 'A',      bars: 8, energy: 0.7 },
-  { id: 'B',      label: 'B',      bars: 8, drumDensity: 0.85, energy: 0.9, filterTilt: 1.08 },
-  { id: 'A',      label: 'A',      bars: 8, energy: 0.75 },
-  { id: 'bridge', label: 'Bridge', bars: 4, mutes: ['kick', 'snare'], drumDensity: 0.55, energy: 0.45, filterTilt: 0.58, fillOnLastBar: true },
-  { id: 'A',      label: 'A',      bars: 8, energy: 1, filterTilt: 1.12 },
-];
+export interface SongForm {
+  id: SongFormId;
+  label: string;
+  description: string;
+  sections: SongSection[];
+}
 
-const ARRANGEMENT_TOTAL_BARS = SONG_ARRANGEMENT.reduce((s, sec) => s + sec.bars, 0);
+export const SONG_FORMS: Record<SongFormId, SongForm> = {
+  classic: {
+    id: 'classic',
+    label: 'Classic',
+    description: 'Intro / A / B / A / bridge / A — the default lofi arc.',
+    sections: [
+      { id: 'intro',  label: 'Intro',  bars: 4, mutes: ['kick', 'snare', 'hihat'], energy: 0.25, filterTilt: 0.72, fillOnLastBar: true },
+      { id: 'A',      label: 'A',      bars: 8, energy: 0.7 },
+      { id: 'B',      label: 'B',      bars: 8, drumDensity: 0.85, energy: 0.9, filterTilt: 1.08 },
+      { id: 'A',      label: 'A',      bars: 8, energy: 0.75 },
+      { id: 'bridge', label: 'Bridge', bars: 4, mutes: ['kick', 'snare'], drumDensity: 0.55, energy: 0.45, filterTilt: 0.58, fillOnLastBar: true },
+      { id: 'A',      label: 'A',      bars: 8, energy: 1, filterTilt: 1.12 },
+    ],
+  },
+  aaba: {
+    id: 'aaba',
+    label: 'AABA',
+    description: '32-bar Tin Pan Alley: A / A / bridge / A.',
+    sections: [
+      { id: 'intro',  label: 'Intro',  bars: 4, mutes: ['kick', 'snare'], energy: 0.35, filterTilt: 0.8, fillOnLastBar: true },
+      { id: 'A',      label: 'A',      bars: 8, energy: 0.7 },
+      { id: 'A',      label: 'A',      bars: 8, energy: 0.78, fillOnLastBar: true },
+      { id: 'bridge', label: 'B',      bars: 8, drumDensity: 0.75, energy: 0.95, filterTilt: 1.12, fillOnLastBar: true },
+      { id: 'A',      label: 'A',      bars: 8, energy: 0.85 },
+    ],
+  },
+  'verse-chorus': {
+    id: 'verse-chorus',
+    label: 'Verse/Chorus',
+    description: 'Intro / verse / chorus / verse / chorus / outro.',
+    sections: [
+      { id: 'intro',  label: 'Intro',  bars: 4, mutes: ['kick', 'snare', 'hihat'], energy: 0.28, filterTilt: 0.72, fillOnLastBar: true },
+      { id: 'A',      label: 'Verse',  bars: 8, energy: 0.62, filterTilt: 0.92 },
+      { id: 'B',      label: 'Chorus', bars: 8, drumDensity: 0.95, energy: 1.0, filterTilt: 1.14, fillOnLastBar: true },
+      { id: 'A',      label: 'Verse',  bars: 8, energy: 0.68, filterTilt: 0.95 },
+      { id: 'B',      label: 'Chorus', bars: 8, drumDensity: 0.98, energy: 1.05, filterTilt: 1.16, fillOnLastBar: true },
+      { id: 'outro',  label: 'Outro',  bars: 4, mutes: ['snare'], drumDensity: 0.5, energy: 0.4, filterTilt: 0.7 },
+    ],
+  },
+  loop: {
+    id: 'loop',
+    label: 'Loop',
+    description: 'Short 16-bar loop with a subtle drop — good for study sessions.',
+    sections: [
+      { id: 'A',      label: 'A',      bars: 8, energy: 0.75 },
+      { id: 'A',      label: 'A',      bars: 4, mutes: ['kick'], drumDensity: 0.7, energy: 0.55, filterTilt: 0.82 },
+      { id: 'A',      label: 'A',      bars: 4, energy: 0.85, fillOnLastBar: true },
+    ],
+  },
+  through: {
+    id: 'through',
+    label: 'Through',
+    description: 'Intro / A / B / C / outro — every section is new.',
+    sections: [
+      { id: 'intro',  label: 'Intro',  bars: 4, mutes: ['kick', 'snare', 'hihat'], energy: 0.25, filterTilt: 0.7, fillOnLastBar: true },
+      { id: 'A',      label: 'A',      bars: 8, energy: 0.65 },
+      { id: 'B',      label: 'B',      bars: 8, drumDensity: 0.9, energy: 0.9, filterTilt: 1.1, fillOnLastBar: true },
+      { id: 'C',      label: 'C',      bars: 8, drumDensity: 0.7, energy: 0.8, filterTilt: 0.95, mutes: ['hihat'], fillOnLastBar: true },
+      { id: 'outro',  label: 'Outro',  bars: 4, mutes: ['snare'], drumDensity: 0.5, energy: 0.4, filterTilt: 0.68 },
+    ],
+  },
+  ballad: {
+    id: 'ballad',
+    label: 'Ballad',
+    description: 'Softer arc: intro / A / bridge / A / outro.',
+    sections: [
+      { id: 'intro',  label: 'Intro',  bars: 4, mutes: ['kick', 'snare', 'hihat'], energy: 0.22, filterTilt: 0.68, fillOnLastBar: true },
+      { id: 'A',      label: 'A',      bars: 8, drumDensity: 0.75, energy: 0.6, filterTilt: 0.9 },
+      { id: 'bridge', label: 'Bridge', bars: 8, mutes: ['kick'], drumDensity: 0.6, energy: 0.75, filterTilt: 1.02, fillOnLastBar: true },
+      { id: 'A',      label: 'A',      bars: 8, drumDensity: 0.8, energy: 0.7, filterTilt: 0.95 },
+      { id: 'outro',  label: 'Outro',  bars: 6, mutes: ['snare', 'kick'], drumDensity: 0.45, energy: 0.32, filterTilt: 0.65 },
+    ],
+  },
+};
 
-export function locateSection(bar: number): { index: number; barInSection: number } {
-  const pos = ((bar % ARRANGEMENT_TOTAL_BARS) + ARRANGEMENT_TOTAL_BARS) % ARRANGEMENT_TOTAL_BARS;
+export function getSongForm(id: SongFormId): SongForm {
+  return SONG_FORMS[id] ?? SONG_FORMS.classic;
+}
+
+export function locateSection(bar: number, sections: SongSection[]): { index: number; barInSection: number } {
+  const total = sections.reduce((s, sec) => s + sec.bars, 0);
+  if (total <= 0) return { index: 0, barInSection: 0 };
+  const pos = ((bar % total) + total) % total;
   let cum = 0;
-  for (let i = 0; i < SONG_ARRANGEMENT.length; i++) {
-    const len = SONG_ARRANGEMENT[i].bars;
+  for (let i = 0; i < sections.length; i++) {
+    const len = sections[i].bars;
     if (pos < cum + len) return { index: i, barInSection: pos - cum };
     cum += len;
   }

@@ -1,8 +1,8 @@
 import * as Tone from 'tone';
 import { createRng } from './rng';
 import { createDrumFillPlan } from './drumFills';
-import { getReharmonizedProgression, getPattern, SONG_ARRANGEMENT, locateSection } from './musicTheory';
-import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SectionInfo, InstrumentMix, TimeSignature } from './types';
+import { getReharmonizedProgression, getPattern, getSongForm, locateSection } from './musicTheory';
+import type { BassStyle, ChordVoice, DrumKit, EngineParams, Mood, ProgressionDef, ReharmFlavor, RhythmPattern, SectionInfo, InstrumentMix, SongFormId, TimeSignature } from './types';
 
 function cloneEngineParams(p: EngineParams): EngineParams {
   return {
@@ -101,6 +101,7 @@ export class LofiEngine {
 
   // Song-form state
   private songFormEnabled = false;
+  private currentSongFormId: SongFormId = 'classic';
   private currentBar = 0;
   private sectionIdx = 0;
   private barInSection = 0;
@@ -193,6 +194,7 @@ export class LofiEngine {
     this.currentTimeSignature = params.timeSignature;
     this.currentEnergy = params.energy;
     this.songFormEnabled = params.songForm;
+    this.currentSongFormId = params.songFormId;
     this.baseLowCut = params.lowCut;
     this.baseHighCut = params.highCut;
 
@@ -880,7 +882,7 @@ export class LofiEngine {
   }
 
   private updateEnergyShaping(rampTime = 0.25): void {
-    const sec = this.songFormEnabled ? SONG_ARRANGEMENT[this.sectionIdx] : null;
+    const sec = this.songFormEnabled ? getSongForm(this.currentSongFormId).sections[this.sectionIdx] : null;
     const userEnergy = clamp(this.currentEnergy / 100, 0, 1);
     const sectionTarget = sec?.energy ?? 1;
     const fillLift = this.isFillBar ? 0.18 : 0;
@@ -904,7 +906,7 @@ export class LofiEngine {
   // fill bar the muted instruments come back so the fill is audible.
   private effectiveMix(): InstrumentMix {
     if (!this.songFormEnabled) return this._mix;
-    const sec = SONG_ARRANGEMENT[this.sectionIdx];
+    const sec = getSongForm(this.currentSongFormId).sections[this.sectionIdx];
     if (!sec.mutes || sec.mutes.length === 0 || this.drumFillActive()) return this._mix;
     const eff = { ...this._mix };
     for (const k of sec.mutes) eff[k] = false;
@@ -941,10 +943,11 @@ export class LofiEngine {
       this.isFillBar = false;
       return;
     }
-    const { index, barInSection } = locateSection(this.currentBar);
+    const sections = getSongForm(this.currentSongFormId).sections;
+    const { index, barInSection } = locateSection(this.currentBar, sections);
     this.sectionIdx = index;
     this.barInSection = barInSection;
-    const sec = SONG_ARRANGEMENT[index];
+    const sec = sections[index];
     this.isFillBar = !!sec.fillOnLastBar && barInSection === sec.bars - 1;
     this.updateEnergyShaping();
   }
@@ -1629,6 +1632,16 @@ export class LofiEngine {
       this.applyEffectiveMix();
       this.refreshDrumMasks();
     }
+    if (params.songFormId !== undefined && params.songFormId !== this.currentSongFormId) {
+      this.currentSongFormId = params.songFormId;
+      if (this.songFormEnabled) {
+        this.currentBar = 0;
+        this.updateSection();
+        this.updateEnergyShaping();
+        this.applyEffectiveMix();
+        this.refreshDrumMasks();
+      }
+    }
 
     if (needsRebuild) {
       this.attachRng();
@@ -1677,7 +1690,7 @@ export class LofiEngine {
 
   getSectionInfo(): SectionInfo | null {
     if (!this.songFormEnabled) return null;
-    const sec = SONG_ARRANGEMENT[this.sectionIdx];
+    const sec = getSongForm(this.currentSongFormId).sections[this.sectionIdx];
     return {
       id: sec.id,
       label: sec.label,
