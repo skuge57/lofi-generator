@@ -132,6 +132,47 @@ body {
   transform: translateY(1px);
 }
 
+/* ── Arrangement Timeline ───────────────────────────────────────────────── */
+
+.arrangement-timeline {
+  position: relative;
+  width: 100%;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.arrangement-timeline svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.timeline-readout {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.timeline-readout-label {
+  color: #e8c896;
+}
+
+.timeline-readout-pos {
+  color: #7a6a5a;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+/* ── App columns ───────────────────────────────────────────────────────── */
+
 .app-columns {
   display: grid;
   grid-template-columns: minmax(250px, 0.92fr) minmax(340px, 1.18fr) minmax(300px, 1fr);
@@ -230,11 +271,11 @@ body {
   cursor: not-allowed;
 }
 
-/* Visualizer */
-.visualizer {
+/* Waveform */
+.waveform {
   position: relative;
   width: 100%;
-  height: 154px;
+  height: 120px;
   overflow: hidden;
   border: 1px solid #342c26;
   border-radius: 8px;
@@ -242,7 +283,7 @@ body {
   box-shadow: inset 0 1px 0 rgba(224, 192, 144, 0.06), inset 0 -18px 48px rgba(0, 0, 0, 0.2);
 }
 
-.visualizer canvas {
+.waveform canvas {
   display: block;
   width: 100%;
   height: 100%;
@@ -984,10 +1025,6 @@ input[type='range']::-moz-range-thumb {
     height: 23px;
     padding: 0 6px;
     font-size: 0.56rem;
-  }
-
-  .visualizer {
-    height: 132px;
   }
 
   .app-columns,

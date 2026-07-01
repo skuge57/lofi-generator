@@ -5,7 +5,8 @@ import { Player } from './components/Player';
 import { LeftControls, RhythmControls, RightControls, SimpleControls } from './components/Controls';
 import { InstrumentToggles } from './components/InstrumentToggles';
 import { ProgressionPicker } from './components/ProgressionPicker';
-import { Visualizer } from './components/Visualizer';
+import { ArrangementTimeline } from './components/ArrangementTimeline';
+import { Waveform } from './components/Waveform';
 import { PROGRESSIONS } from './engine/musicTheory';
 import { BASS_STYLES } from './engine/types';
 import type { ChordVoice, DrumKit, EngineParams, Mood, ReharmFlavor, SceneId, SectionInfo, TimeSignature } from './engine/types';
@@ -489,7 +490,8 @@ export default function App() {
         </div>
       </div>
 
-      <Visualizer engineRef={engineRef} playing={playing} />
+      <Waveform engineRef={engineRef} playing={playing} />
+      <ArrangementTimeline sectionInfo={sectionInfo} songForm={params.songForm} playing={playing} />
 
       {controlMode === 'simple' ? (
         <SimpleControls params={params} onChange={handleParamChange} />
